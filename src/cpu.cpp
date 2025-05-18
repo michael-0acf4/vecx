@@ -1,5 +1,5 @@
 #include "cpu.hpp"
-#include "math.h"
+#include <cmath>
 
 double f32_norm(const vecx *v) {
   float s = 0;

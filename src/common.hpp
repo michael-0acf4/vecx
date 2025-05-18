@@ -1,7 +1,8 @@
 
 #pragma once
 
-#include <stdint.h>
+#include <cstdint>
+#include <iostream>
 
 typedef enum vecx_dtype {
   INT_32 = 1,

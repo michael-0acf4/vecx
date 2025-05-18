@@ -1,3 +1,4 @@
+
 #include <memory>
 
 #include "sqlite3ext.h"
@@ -6,7 +7,7 @@ SQLITE_EXTENSION_INIT1
 #include "common.hpp"
 
 #ifdef ENABLE_CUDA_MODE
-#include "gpu.hpp"
+#include "gpu.cuh"
 #else
 #include "cpu.hpp"
 #endif
@@ -35,8 +36,7 @@ void vecx_emit_error(sqlite3_context *ctx, vecx_status status) {
   }
 }
 
-extern "C" void vecx_size(sqlite3_context *ctx, int argc,
-                          sqlite3_value **argv) {
+void vecx_size(sqlite3_context *ctx, int argc, sqlite3_value **argv) {
   if (argc != 1) {
     sqlite3_result_null(ctx);
     return;
@@ -53,8 +53,7 @@ extern "C" void vecx_size(sqlite3_context *ctx, int argc,
     sqlite3_result_int64(ctx, (int64_t)vec.size);
 }
 
-extern "C" void vecx_type(sqlite3_context *ctx, int argc,
-                          sqlite3_value **argv) {
+void vecx_type(sqlite3_context *ctx, int argc, sqlite3_value **argv) {
   if (argc != 1) {
     sqlite3_result_null(ctx);
     return;
@@ -85,8 +84,7 @@ extern "C" void vecx_type(sqlite3_context *ctx, int argc,
   }
 }
 
-extern "C" void vecx_norm(sqlite3_context *ctx, int argc,
-                          sqlite3_value **argv) {
+void vecx_norm(sqlite3_context *ctx, int argc, sqlite3_value **argv) {
   if (argc != 1) {
     sqlite3_result_null(ctx);
     return;

@@ -6,7 +6,7 @@ b = [4, 0.0, 0.0, 0.0, 3.0]
 
 conn = sqlite3.connect(":memory:")
 conn.enable_load_extension(True)  # !
-conn.load_extension("../vecx.dll")  # !
+conn.load_extension("vecx.dll")  # !
 
 conn.execute("CREATE TABLE Test (a BLOB, b BLOB);")
 

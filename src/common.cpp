@@ -1,5 +1,5 @@
 #include "common.hpp"
-#include <memory.h>
+#include <memory>
 
 uint64_t vecx_type_size(vecx_dtype dtype) {
   switch (dtype) {

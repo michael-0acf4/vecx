@@ -1,4 +1,4 @@
-#include "common.hpp"
+#include "gpu.cuh"
 #include <cuda_runtime.h>
 #include <math.h>
 
@@ -63,5 +63,5 @@ extern "C" float f32_norm(const vecx *v)
 {
     float r;
     f32_norm_cuda(v, &r);
-    return 4.5;
+    return r;
 }
