@@ -1,8 +1,8 @@
 import sqlite3
-from vecx_spec import pack_vecx_f32_blob
+from vecx_spec import pack_vecx_f32_blob, unpack_vecx_f32_blob
 
 a = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0]
-b = [-1.0, 0.0, 3.0, 8.0, 5.0]
+b = [4, 0.0, 0.0, 0.0, 3.0]
 
 conn = sqlite3.connect(":memory:")
 conn.enable_load_extension(True)  # !
@@ -19,15 +19,10 @@ conn.commit()
 cur = conn.cursor()
 for row in cur.execute("SELECT a, b FROM Test"):
     for col, blob in zip(["a", "b"], row):
-        print(f" {col}: {blob[:20]} ... {len(blob)} bytes")
+        print(f" {col}: {unpack_vecx_f32_blob(blob)[:20]} ... {len(blob)} bytes")
 
 print("Simple data check")
 for row in conn.execute(
-    "SELECT vecx_size(a), vecx_type(a), vecx_size(b), vecx_type(b)  FROM Test"
+    "SELECT vecx_size(a), vecx_type(a), vecx_norm(a), vecx_size(b), vecx_type(b), vecx_norm(b)  FROM Test"
 ):
     print(f"Row: {row}")
-
-
-# print("Bad data")
-# for row in conn.execute("SELECT vecx_size(1234)"):
-#     print(f"Row: {row}")

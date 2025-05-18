@@ -2,6 +2,15 @@
 
 A simple SQLite extension that enables direct GPU accelerated vector operations.
 
+# Building
+
+```bash
+make build
+
+# Using cuda
+make build USE_CUDA=1
+```
+
 # Roadmap
 
 - [ ] Euclidean distance
