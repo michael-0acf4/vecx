@@ -33,6 +33,9 @@ static const std::string yellow(const std::string &s) {
 
 #define DEBUG(expr)                                                            \
   std::cout << yellow(" debug :: ") << #expr << " = " << expr << "\n";
+#define DEBUG_NUMBER(expr)                                                     \
+  std::cout << yellow(" debug :: ") << std::setprecision(30) << #expr << " = " \
+            << expr << "\n";
 #define LGTM return "";
 
 static std::vector<std::pair<const char *, std::function<std::string()>>> &
@@ -69,8 +72,9 @@ int run_all_tests() {
 
   if (fail > 0) {
     std::cout << "\n----------\n"
-              << red(std::to_string(fail)) << red("/")
-              << red(std::to_string(total_tests)) << red(" Sailed") << "\n";
+              << red(std::to_string(fail)) + red("/") +
+                     red(std::to_string(total_tests))
+              << red(" Failed") << "\n";
     return -1;
   } else {
     auto tot_str = green(std::to_string(total_tests));

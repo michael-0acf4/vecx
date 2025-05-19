@@ -7,12 +7,14 @@ operations.
 >
 > This is still at the draft stage.
 
-# Building
+# Building and Testing
 
 ```bash
+make test
 make build
 
-# Using cuda
+# With cuda
+make test USE_CUDA=1
 make build USE_CUDA=1
 ```
 

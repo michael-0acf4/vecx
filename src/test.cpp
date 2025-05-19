@@ -7,28 +7,34 @@
 
 #ifdef ENABLE_CUDA_MODE
 #include "gpu.cuh"
+#define IS_GPU 1
 #else
 #include "cpu.hpp"
 #endif
 
-TEST(test) {
+TEST(tests) {
   ASSERT(1 + 1 == 2);
-  ASSERT(1 + 2 == 3);
+  LGTM
+}
+
+TEST(eucl_norm_basic) {
+  float data[2] = {4.0, 3.0};
+  vecx v = {.size = 2, .dtype = FLOAT_32, .data = data};
+
+  ASSERT(fabs(f32_norm(&v) - 5.0) < 10e-6)
 
   LGTM
 }
 
-TEST(eucl_norm_simple) {
-  vecx v;
-  float x[177013];
-  for (int i = 0; i < 177013; i++, x[i] = 1)
+TEST(eucl_norm_huge) {
+  float data[177013];
+  for (int i = 0; i < 177013; data[i++] = 1)
     ;
-  v.data = (void *)x;
-  v.dtype = FLOAT_32;
-  v.size = 177013;
+  vecx v = {.size = 177013, .dtype = FLOAT_32, .data = data};
 
-  // DEBUG(f32_norm(&v)) // debug :: f32_norm(&v) = 420.728
-  ASSERT(fabs(f32_norm(&v) - 420.7291290129553) < 10e-3)
+  // DEBUG_NUMBER(f32_norm(&v) -
+  //              sqrt(v.size))
+  ASSERT(fabs(f32_norm(&v) - sqrt(static_cast<double>(v.size))) < 10e-6)
 
   LGTM
 }
