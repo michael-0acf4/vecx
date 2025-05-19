@@ -1,6 +1,11 @@
 # vecx
 
-A simple SQLite extension that enables direct GPU accelerated vector operations.
+A simple SQLite extension that enables direct GPU or SIMD accelerated vector
+operations.
+
+> [!WARNING]
+>
+> This is still at the draft stage.
 
 # Building
 
@@ -13,7 +18,7 @@ make build USE_CUDA=1
 
 # Roadmap
 
-- [ ] Euclidean distance
+- [x] Euclidean distance
 - [ ] Basic binary ops
   - [ ] Add
   - [ ] Substract

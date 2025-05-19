@@ -2,7 +2,7 @@ import sqlite3
 from vecx_spec import pack_vecx_f32_blob, unpack_vecx_f32_blob
 
 a = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0]
-b = [4, 0.0, 0.0, 0.0, 3.0]
+b = [1.0] * 177013  # sqrt(177013) = 420.72912901295531762412409498899
 
 conn = sqlite3.connect(":memory:")
 conn.enable_load_extension(True)  # !

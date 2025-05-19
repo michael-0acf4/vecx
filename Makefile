@@ -7,7 +7,7 @@ ifdef USE_CUDA
 	SRC = src/common.cpp  src/gpu.cu src/$(NAME).cpp
 else
 	CC = g++
-	CFLAGS = -std=c++14 -fPIC -shared -I./vendors/sqlite3
+	CFLAGS = -std=c++14 -mavx2  -fPIC -shared -I./vendors/sqlite3
 	SRC = src/$(NAME).cpp src/common.cpp src/cpu.cpp
 endif
 
