@@ -1,5 +1,6 @@
 #pragma once
 
+#include <chrono>
 #include <functional>
 #include <iomanip>
 #include <iostream>
@@ -31,11 +32,12 @@ static const std::string yellow(const std::string &s) {
     return oss.str();                                                          \
   }
 
-#define DEBUG(expr)                                                            \
-  std::cout << yellow(" debug :: ") << #expr << " = " << expr << "\n";
-#define DEBUG_NUMBER(expr)                                                     \
-  std::cout << yellow(" debug :: ") << std::setprecision(30) << #expr << " = " \
+#define DEBUG(where, expr)                                                     \
+  std::cout << yellow(#where) << yellow(" debug :: ") << #expr << " = "        \
             << expr << "\n";
+#define DEBUG_NUMBER(where, expr)                                              \
+  std::cout << yellow(#where) << yellow(" debug :: ") << std::setprecision(30) \
+            << #expr << " = " << expr << "\n";
 #define LGTM return "";
 
 static std::vector<std::pair<const char *, std::function<std::string()>>> &
@@ -57,7 +59,12 @@ int run_all_tests() {
   std::cout << "Found " << total_tests << " tests.."
             << "\n----------\n";
   for (const auto &test : tests) {
+    auto t1 = std::chrono::high_resolution_clock::now();
     auto err = test.second();
+    auto t2 = std::chrono::high_resolution_clock::now();
+    auto ms_int =
+        std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1);
+
     if (!err.empty()) {
       fail++;
     } else {
@@ -66,7 +73,7 @@ int run_all_tests() {
 
     const auto status = (err.empty() ? green("OK") : red("FAIL"));
     std::cout << "[TEST" << std::setw(2) << (number++) << "] " << test.first
-              << ": " << status << "\n"
+              << ": " << status << " (" << ms_int.count() << " ms)\n"
               << err;
   }
 

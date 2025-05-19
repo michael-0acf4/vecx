@@ -4,7 +4,7 @@
 
 __global__ void euclidean_norm_kernel(const float *data, uint64_t size, float *result)
 {
-    __shared__ float partial_sum[256];
+    extern __shared__ float partial_sum[];
 
     int tid = threadIdx.x + blockIdx.x * blockDim.x;
     int local_tid = threadIdx.x;
@@ -12,8 +12,7 @@ __global__ void euclidean_norm_kernel(const float *data, uint64_t size, float *r
     float sum = 0.0f;
     if (tid < size)
     {
-        const float *fdata = (const float *)data;
-        float val = fdata[tid];
+        float val = data[tid];
         sum = val * val;
     }
 
@@ -28,11 +27,9 @@ __global__ void euclidean_norm_kernel(const float *data, uint64_t size, float *r
         __syncthreads();
     }
 
-    // final result from thread 0 of block 0
-    if (local_tid == 0 && blockIdx.x == 0)
-    {
+    // final result from thread 0
+    if (local_tid == 0)
         atomicAdd(result, partial_sum[0]);
-    }
 }
 
 void f32_norm_cuda(const float *data, uint64_t size, float *result)
@@ -48,7 +45,9 @@ void f32_norm_cuda(const float *data, uint64_t size, float *result)
     // Launch
     int threads = 256;
     int blocks = (size + threads - 1) / threads;
-    euclidean_norm_kernel<<<blocks, threads>>>(d_data, size, d_result);
+    size_t shared_size = threads * sizeof(float);
+    euclidean_norm_kernel<<<blocks, threads, shared_size>>>(d_data, size, d_result);
+    cudaDeviceSynchronize();
 
     float h_result = 0;
     cudaMemcpy(&h_result, d_result, sizeof(float), cudaMemcpyDeviceToHost);

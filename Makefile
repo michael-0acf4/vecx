@@ -10,9 +10,10 @@ else
 endif
 
 # use of designated initializers requires '/std:c++20' on cl.exe
+# nvcc (cuda_12.2.r12.2) crashes on '/std:c++20' (but works on /std:c++latest)
 ifdef USE_CUDA
 	CC = nvcc
-	CFLAGS = -Xcompiler="-DENABLE_CUDA_MODE /std:c++20" -I./vendors/sqlite3
+	CFLAGS = -Xcompiler="-DENABLE_CUDA_MODE /std:c++14" -I./vendors/sqlite3
 	SRC_BACKEND = src/gpu.cu
 else
 	CC = g++
