@@ -1,3 +1,4 @@
+import os
 import sqlite3
 from vecx_spec import pack_vecx_f32_blob, unpack_vecx_f32_blob
 
@@ -6,7 +7,9 @@ b = [1.0] * 177013  # sqrt(177013) = 420.72912901295531762412409498899
 
 conn = sqlite3.connect(":memory:")
 conn.enable_load_extension(True)  # !
-conn.load_extension("vecx.dll")  # !
+
+ext = ".dll" if os.name == "nt" else ""
+conn.load_extension(f"./bin/vecx{ext}")
 
 conn.execute("CREATE TABLE Test (a BLOB, b BLOB);")
 
