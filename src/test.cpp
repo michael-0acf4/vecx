@@ -1,7 +1,5 @@
 #include "test.hpp"
-
 #include "common.hpp"
-
 #include <cmath>
 #include <memory>
 

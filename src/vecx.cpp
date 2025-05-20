@@ -71,11 +71,14 @@ void vecx_type(sqlite3_context *ctx, int argc, sqlite3_value **argv) {
     case INT_32:
       sqlite3_result_text(ctx, "I32", -1, SQLITE_STATIC);
       break;
-    case INT_64:
-      sqlite3_result_text(ctx, "I64", -1, SQLITE_STATIC);
-      break;
     case FLOAT_32:
       sqlite3_result_text(ctx, "F32", -1, SQLITE_STATIC);
+      break;
+    case QINT_8:
+      sqlite3_result_text(ctx, "QI8", -1, SQLITE_STATIC);
+      break;
+    case QUINT_8:
+      sqlite3_result_text(ctx, "QU8", -1, SQLITE_STATIC);
       break;
     default:
       vecx_emit_error(ctx, VECX_ERR_UNKNOWN_DTYPE);

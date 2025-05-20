@@ -4,8 +4,9 @@ import numpy as np
 
 class VECX_DTYPE:
     INT32 = 1
-    INT64 = 2
-    FLOAT32 = 3
+    FLOAT32 = 2
+    QINT8 = 3
+    QUINT8 = 4
 
 
 def pack_vecx_f32_blob(floats):

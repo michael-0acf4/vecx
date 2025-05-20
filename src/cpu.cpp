@@ -1,9 +1,7 @@
 #include "cpu.hpp"
+#include "common.hpp"
 #include <cmath>
-
 #include <immintrin.h> // simd
-
-#include <immintrin.h>
 #include <math.h>
 #include <stdint.h>
 
@@ -29,9 +27,8 @@ double f32_norm(const vecx *v) {
       sum += tmp[j];
 
     // rem
-    for (; i < v->size; ++i) {
+    for (; i < v->size; ++i)
       sum += data[i] * data[i];
-    }
 
     break;
   }
@@ -43,17 +40,8 @@ double f32_norm(const vecx *v) {
     }
     break;
   }
-  case INT_64: { // TODO: simd
-    const int64_t *data = (const int64_t *)v->data;
-    for (uint64_t i = 0; i < v->size; ++i) {
-      float val = (float)data[i];
-      sum += val * val;
-    }
-    break;
-  }
-
   default:
-    return 0.0;
+    UNREACHABLE();
   }
 
   return sqrtf(sum);

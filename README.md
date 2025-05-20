@@ -1,6 +1,6 @@
 # vecx
 
-A simple SQLite extension that enables direct GPU or SIMD accelerated vector
+A simple SQLite extension that enables direct GPU and/or SIMD accelerated vector
 operations.
 
 > [!WARNING]
@@ -17,6 +17,13 @@ make build
 make test USE_CUDA=1
 make build USE_CUDA=1
 ```
+
+# Datatypes
+
+- FLOAT_32 (f32)
+- INT_32 (i32)
+- QINT_8 (qi8)
+- QUINT_8 (qu8)
 
 # Roadmap
 

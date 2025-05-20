@@ -1,7 +1,6 @@
 ifeq ($(OS),Windows_NT)
 	OUTPUT = ./bin/vecx.dll
 	OUTPUT_TEST = ./bin/test.exe
-	SHELLFLAGS := /C
 	mkdir_if_not_exists = if not exist "$(1)" mkdir "$(1)"
 else
 	OUTPUT = ./bin/vecx
@@ -31,4 +30,4 @@ test:
 	$(OUTPUT_TEST)
 
 python: build
-	python3 e2e/basic.py
+	python e2e/basic.py

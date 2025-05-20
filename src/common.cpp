@@ -7,8 +7,9 @@ uint64_t vecx_type_size(vecx_dtype dtype) {
   case FLOAT_32:
   case INT_32:
     return 4;
-  case INT_64:
-    return 8;
+  case QINT_8:
+  case QUINT_8:
+    return 1;
   default:
     return 0;
   }
@@ -43,7 +44,8 @@ vecx_status vecx_parse_blob(const void *blob, int blob_size, vecx *out_vecx) {
 
   // dtype
   vecx_dtype dtype = (vecx_dtype)data[offset];
-  if (dtype != INT_32 && dtype != INT_64 && dtype != FLOAT_32)
+  if (dtype != INT_32 && dtype != FLOAT_32 && dtype != QUINT_8 &&
+      dtype != QUINT_8)
     return VECX_ERR_UNKNOWN_DTYPE;
   out_vecx->dtype = dtype;
   offset += 1;
@@ -58,7 +60,7 @@ vecx_status vecx_parse_blob(const void *blob, int blob_size, vecx *out_vecx) {
   int type_size = vecx_type_size(out_vecx->dtype);
   uint64_t expected_total = header_size + size * type_size;
   if ((uint64_t)blob_size != expected_total) {
-    // printf("%d =? %d + %d * %d", blob_size, header_size, size, type_size);
+    // printf("%d =? %d + %d * %d\n", blob_size, header_size, size, type_size);
     return VECX_ERR_INVALID_SIZE;
   }
 

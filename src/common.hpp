@@ -1,13 +1,21 @@
-
 #pragma once
 
+#include <cassert>
 #include <cstdint>
 #include <iostream>
 
+
+#define UNREACHABLE()                                                          \
+  do {                                                                         \
+    assert(0);                                                                 \
+    __builtin_unreachable();                                                   \
+  } while (0)
+
 typedef enum vecx_dtype {
   INT_32 = 1,
-  INT_64 = 2,
-  FLOAT_32 = 3,
+  FLOAT_32 = 2,
+  QINT_8 = 3,
+  QUINT_8 = 4
 } vecx_dtype;
 
 typedef enum vecx_status {
