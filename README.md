@@ -21,9 +21,7 @@ make build USE_CUDA=1
 # Datatypes
 
 - FLOAT_32 (f32)
-- INT_32 (i32)
 - QINT_8 (qi8)
-- QUINT_8 (qu8)
 
 # Roadmap
 
@@ -38,5 +36,3 @@ make build USE_CUDA=1
 - [ ] Explicit logical type promotion (e.g. i64 -> f32)
 - [ ] Dot product
 - [ ] Vector folding `vecx_fold('+' | '-' | '/' | '*', blob, init)`
-- [ ] Matrix multiplication (+reshape)
-  - [ ] `vecx_matmul(vecx_reshape(col1, 3, 3), vecx_reshape(col1, 3, 1))`

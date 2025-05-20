@@ -1,9 +1,9 @@
 import os
 import sqlite3
-from vecx_spec import pack_vecx_f32_blob, unpack_vecx_f32_blob
+from vecx_spec import Vecx, VECX_DTYPE
 
-a = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0]
-b = [1.0] * 177013  # sqrt(177013) = 420.72912901295531762412409498899
+a = Vecx([1.0, 2.0, 3.0, 4.0, 5.0, 6.0], dtype=VECX_DTYPE.FLOAT32)
+b = Vecx([1.0] * 177013, dtype=VECX_DTYPE.FLOAT32)
 
 conn = sqlite3.connect(":memory:")
 conn.enable_load_extension(True)  # !
@@ -15,14 +15,15 @@ conn.execute("CREATE TABLE Test (a BLOB, b BLOB);")
 
 conn.execute(
     "INSERT INTO Test (a, b) VALUES (?, ?)",
-    (pack_vecx_f32_blob(a), pack_vecx_f32_blob(b)),
+    (a.pack(), b.pack()),
 )
 conn.commit()
 
 cur = conn.cursor()
 for row in cur.execute("SELECT a, b FROM Test"):
     for col, blob in zip(["a", "b"], row):
-        print(f" {col}: {unpack_vecx_f32_blob(blob)[:20]} ... {len(blob)} bytes")
+        x = Vecx.unpack(blob)
+        print(f" {col}: {x[:20]} ... {len(blob)} bytes, {len(x)} elements")
 
 
 for row in conn.execute("SELECT vecx_info()"):

@@ -10,12 +10,7 @@
     __builtin_unreachable();                                                   \
   } while (0)
 
-typedef enum vecx_dtype {
-  INT_32 = 1,
-  FLOAT_32 = 2,
-  QINT_8 = 3,
-  QUINT_8 = 4
-} vecx_dtype;
+typedef enum vecx_dtype { FLOAT_32 = 1, QINT_8 = 2 } vecx_dtype;
 
 typedef enum vecx_status {
   VECX_OK = 0,
@@ -27,9 +22,15 @@ typedef enum vecx_status {
   VECX_ERR_GENERIC = -1000,
 } vecx_status;
 
+typedef struct quant_params {
+  float scale;
+  int32_t zero;
+} quant_params;
+
 typedef struct vecx {
   uint64_t size;
   vecx_dtype dtype;
+  quant_params qparams;
   const void *data;
 } vecx;
 

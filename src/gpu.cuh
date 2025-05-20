@@ -4,5 +4,5 @@
 #include <cuda_runtime.h>
 
 // Note: assumes vecx is a plain old struct
-extern "C" float f32_norm(const vecx *v);
-extern "C" void init_device();
+float f32_norm(const vecx *v);
+void init_device();
