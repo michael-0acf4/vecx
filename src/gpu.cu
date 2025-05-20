@@ -64,3 +64,11 @@ extern "C" float f32_norm(const vecx *v)
     f32_norm_cuda((const float *)v->data, v->size, &r);
     return r;
 }
+
+// CUDA context init often skew test duration without this trick
+__global__ void init_kernel() {}
+extern "C" void init_device()
+{
+    init_kernel<<<1, 1>>>();
+    cudaDeviceSynchronize();
+}

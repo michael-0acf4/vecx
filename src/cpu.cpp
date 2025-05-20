@@ -47,6 +47,8 @@ double f32_norm(const vecx *v) {
   return sqrtf(sum);
 }
 
+void init_device() {}
+
 // double f32_norm_naive(const vecx *v) {
 //   float s = 0;
 

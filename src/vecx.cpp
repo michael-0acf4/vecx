@@ -106,6 +106,9 @@ void vecx_norm(sqlite3_context *ctx, int argc, sqlite3_value **argv) {
 
 extern "C" int sqlite3_vecx_init(sqlite3 *db, char **pzErrMsg,
                                  const sqlite3_api_routines *pApi) {
+
+  init_device();
+
   SQLITE_EXTENSION_INIT2(pApi);
 
   sqlite3_create_function(db, "vecx_size", 1,

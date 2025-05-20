@@ -20,7 +20,6 @@ TEST(eucl_norm_basic) {
   vecx v = {2, FLOAT_32, data};
 
   ASSERT(fabs(f32_norm(&v) - 5.0) < 10e-6)
-
   LGTM
 }
 
@@ -29,11 +28,12 @@ TEST(eucl_norm_huge) {
   for (int i = 0; i < 177013; data[i++] = 1)
     ;
   vecx v = {177013, FLOAT_32, data};
-
   // DEBUG_NUMBER(eucl_norm_huge, f32_norm(&v))
   ASSERT(fabs(f32_norm(&v) - sqrt(static_cast<double>(v.size))) < 10e-6)
-
   LGTM
 }
 
-int main() { return run_all_tests(); }
+int main() {
+  init_device();
+  return run_all_tests();
+}
