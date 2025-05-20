@@ -24,6 +24,10 @@ for row in cur.execute("SELECT a, b FROM Test"):
     for col, blob in zip(["a", "b"], row):
         print(f" {col}: {unpack_vecx_f32_blob(blob)[:20]} ... {len(blob)} bytes")
 
+
+for row in conn.execute("SELECT vecx_info()"):
+    print(f"INFO: {row}")
+
 print("Simple data check")
 for row in conn.execute(
     "SELECT vecx_size(a), vecx_type(a), vecx_norm(a), vecx_size(b), vecx_type(b), vecx_norm(b)  FROM Test"

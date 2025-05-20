@@ -4,7 +4,6 @@
 #include <cstdint>
 #include <iostream>
 
-
 #define UNREACHABLE()                                                          \
   do {                                                                         \
     assert(0);                                                                 \

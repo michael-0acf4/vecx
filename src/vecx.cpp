@@ -104,8 +104,28 @@ void vecx_norm(sqlite3_context *ctx, int argc, sqlite3_value **argv) {
     sqlite3_result_double(ctx, f32_norm(&vec));
 }
 
-extern "C" int sqlite3_vecx_init(sqlite3 *db, char **pzErrMsg,
-                                 const sqlite3_api_routines *pApi) {
+void vecx_info(sqlite3_context *ctx, int argc, sqlite3_value **argv) {
+  if (argc != 0) {
+    sqlite3_result_null(ctx);
+    return;
+  }
+
+#ifdef ENABLE_CUDA_MODE
+  sqlite3_result_text(ctx, "Backend: GPU (CUDA)", -1, SQLITE_STATIC);
+#else
+  sqlite3_result_text(ctx, "Backend: CPU", -1, SQLITE_STATIC);
+#endif
+}
+
+// nvcc + cl does not automatically export the symbols
+#ifdef _WIN32
+#define EXPORT extern "C" __declspec(dllexport)
+#else
+#define EXPORT extern "C"
+#endif
+
+EXPORT int sqlite3_vecx_init(sqlite3 *db, char **pzErrMsg,
+                             const sqlite3_api_routines *pApi) {
 
   init_device();
 
@@ -120,6 +140,8 @@ extern "C" int sqlite3_vecx_init(sqlite3 *db, char **pzErrMsg,
   sqlite3_create_function(db, "vecx_norm", 1,
                           SQLITE_UTF8 | SQLITE_DETERMINISTIC, 0, vecx_norm, 0,
                           0);
-
+  sqlite3_create_function(db, "vecx_info", 0,
+                          SQLITE_UTF8 | SQLITE_DETERMINISTIC, 0, vecx_info, 0,
+                          0);
   return SQLITE_OK;
 }
