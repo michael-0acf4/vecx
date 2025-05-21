@@ -32,6 +32,20 @@ static const std::string yellow(const std::string &s) {
     return oss.str();                                                          \
   }
 
+#define _EPSILON 10e-6
+#define ASSERT_CLOSE(left, right, precision)                                   \
+  if (!(fabs(left - right) <= precision)) {                                    \
+    std::ostringstream oss;                                                    \
+    std::string sleft =                                                        \
+        "\n   " + yellow(#left) + " (" + std::to_string(left) + ")";           \
+    std::string sright =                                                       \
+        " vs " + yellow(#right) + " (" + std::to_string(right) + ")";          \
+                                                                               \
+    oss << red("  Assertion failed (close): ") << sleft << sright << "\n  at " \
+        << __FILE__ << ":" << __LINE__ << "\n";                                \
+    return oss.str();                                                          \
+  }
+
 #define DEBUG(where, expr)                                                     \
   std::cout << yellow(#where) << yellow(" debug :: ") << #expr << " = "        \
             << expr << "\n";
@@ -65,10 +79,10 @@ int run_all_tests() {
     auto ms_int =
         std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1);
 
-    if (!err.empty()) {
-      fail++;
-    } else {
+    if (err.empty()) {
       sucess++;
+    } else {
+      fail++;
     }
 
     const auto status = (err.empty() ? green("OK") : red("FAIL"));

@@ -26,7 +26,6 @@ class Vecx:
         self,
         data: List[any] | np.ndarray,
         *,
-        dtype=VECX_DTYPE.FLOAT32,
         auto_quantize=False,
         symmetric=False,
         scale=None,
@@ -35,18 +34,17 @@ class Vecx:
         self.np_data = (
             np.array(data, dtype=np.float32) if isinstance(data, list) else data
         )
-        self.dtype = dtype
         self.scale = scale or 0.0
+        self.dtype = VECX_DTYPE.FLOAT32
         self.zero = zero or 0
 
-        if dtype == VECX_DTYPE.FLOAT32:
-            if auto_quantize:
-                self._determine_scale_and_zero(symmetric or False)
-            # try auto-quantizing
-            if self.scale < 0.0:
-                raise Exception("Quantization scale cannot be 0 or negative")
-            elif self.scale > 0.0:
-                self._quantize_i8()
+        if auto_quantize:
+            self._determine_scale_and_zero(symmetric or False)
+        # try auto-quantizing
+        if self.scale < 0.0:
+            raise Exception("Quantization scale cannot be 0 or negative")
+        elif self.scale > 0.0:
+            self._quantize_i8()
         # else user uses the class as a dumb serializer
 
     # https://huggingface.co/docs/optimum/en/concept_guides/quantization
@@ -76,8 +74,9 @@ class Vecx:
 
     def dequantize_to_vec_f32(self):
         if self.dtype != VECX_DTYPE.FLOAT32:
-            data = self.scale * (self.np_data.astype(np.float32) - self.zero)
-            return Vecx(data, dtype=VECX_DTYPE.FLOAT32)
+            # Note: astype(np.float32) works too (slower)
+            data = self.scale * (self.np_data.astype(np.int32) - self.zero)
+            return Vecx(data)
         return self
 
     def pack(self) -> bytearray:
@@ -118,7 +117,7 @@ class Vecx:
         elif dtype == VECX_DTYPE.QINT8:
             data = np.frombuffer(actual_data, dtype=np.int8).tolist()
 
-        return Vecx(data, dtype=dtype, scale=scale, zero=zero)
+        return Vecx(data, scale=scale, zero=zero)
 
     def __getitem__(self, index):
         return self.np_data[index]

@@ -2,7 +2,7 @@
 #include <cstdlib>
 #include <cstring>
 
-uint64_t vecx_type_size(vecx_dtype dtype) {
+uint64_t vecx_type_size(const vecx_dtype &dtype) {
   switch (dtype) {
   case FLOAT_32:
     return 4;

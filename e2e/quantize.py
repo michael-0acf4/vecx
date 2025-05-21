@@ -26,3 +26,5 @@ assert np.allclose(
         ]
     ),
 )
+
+print("ALL OK")

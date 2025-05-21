@@ -35,4 +35,10 @@ typedef struct vecx {
 } vecx;
 
 vecx_status vecx_parse_blob(const void *blob, int blob_size, vecx *out_vecx);
-uint64_t vecx_type_size(vecx_dtype dtype);
+uint64_t vecx_type_size(const vecx_dtype &dtype);
+
+inline float _cpu_dequantize_i8(int8_t value, const quant_params &qparams);
+inline float _cpu_dequantize_i8(int8_t value, const quant_params &qparams) {
+  return qparams.scale *
+         static_cast<float>(static_cast<int32_t>(value) - qparams.zero);
+}
