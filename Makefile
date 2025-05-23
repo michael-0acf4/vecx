@@ -10,6 +10,7 @@ endif
 
 # use of designated initializers requires '/std:c++20' on cl.exe
 # nvcc (cuda_12.2.r12.2) crashes on '/std:c++20' (but works on /std:c++latest)
+OPT = -O2
 ifdef USE_CUDA
 	CC = nvcc
 	CFLAGS = -Xcompiler="-DENABLE_CUDA_MODE /std:c++14" -I./vendors/sqlite3
@@ -22,11 +23,11 @@ endif
 
 build:
 	@$(call mkdir_if_not_exists,bin)
-	$(CC) $(CFLAGS) -shared -o $(OUTPUT) src/common.cpp src/vecx.cpp $(SRC_BACKEND)
+	$(CC) $(CFLAGS) $(OPT) -shared -o $(OUTPUT) src/common.cpp src/vecx.cpp $(SRC_BACKEND)
 
 test:
 	@$(call mkdir_if_not_exists,bin)
-	$(CC) $(CFLAGS) src/common.cpp $(SRC_BACKEND) src/test.cpp -o $(OUTPUT_TEST)
+	$(CC) $(CFLAGS) $(OPT) src/common.cpp $(SRC_BACKEND) src/test.cpp -o $(OUTPUT_TEST)
 	$(OUTPUT_TEST)
 
 python: build

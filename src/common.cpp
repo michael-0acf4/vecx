@@ -1,6 +1,7 @@
 #include "common.hpp"
 #include <cstdlib>
 #include <cstring>
+#include <immintrin.h>
 
 uint64_t vecx_type_size(const vecx_dtype &dtype) {
   switch (dtype) {
@@ -74,4 +75,29 @@ vecx_status vecx_parse_blob(const void *blob, int blob_size, vecx *out_vecx) {
   out_vecx->data = data + offset;
 
   return VECX_OK;
+}
+
+vecx vecx_dequantize_to_f32(const vecx &v) {
+  if (v.dtype == FLOAT_32) {
+    return v;
+  }
+  const int8_t *data = static_cast<const int8_t *>(v.data);
+  size_t i = 0;
+  const size_t block = 256 / 8;
+
+  float_t *result = (float_t *)malloc(v.size * sizeof(float));
+
+  // size_t pos = 0;
+  // const auto handler = [&](const __m256 &scaled) {
+  //   // Note: i increments 'block' amount
+  //   _mm256_storeu_ps(result + pos, scaled);
+  //   pos += 4 * sizeof(float);
+  // };
+  // _cpu_dequantize_i8_single_vec_routine(i, block, data, v.size, v.qparams,
+  //                                       handler);
+
+  for (; i < v.size; i++)
+    result[i] = _cpu_dequantize_i8(data[i], v.qparams);
+
+  return {v.size, FLOAT_32, {}, result};
 }
