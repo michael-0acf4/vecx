@@ -59,16 +59,26 @@ TEST(eucl_norm_on_quantized_i8) {
 }
 
 TEST(eucl_norm_on_huge_quantized_i8) {
-  const size_t size = 65500;
-  int8_t data[size];
+  // Tensors often are around 100mb, 200mb, 1Gb
+  const size_t actual_size_mb = 1000;
+  const size_t size = actual_size_mb * 1048576;
+  // stack is too small for large vectors
+  std::unique_ptr<int8_t[]> data(new int8_t[size]);
+
   for (int i = 0; i < size; i++) {
     data[i] = _cpu_quantize_i8(1.0, {1.0, -128});
   }
-  vecx qvx = {size, QINT_8, {1.0, -128}, data};
-  ASSERT_CLOSE(f32_norm(&qvx), 255.929672, _EPSILON)
+  auto t1 = std::chrono::high_resolution_clock::now();
+  vecx qvx = {size, QINT_8, {1.0, -128}, data.get()};
+  ASSERT_CLOSE(f32_norm(&qvx), 11585.237305, _EPSILON);
 
   vecx vx = vecx_dequantize_to_f32(qvx);
-  ASSERT_CLOSE(f32_norm(&vx), 255.929672, _EPSILON)
+  ASSERT_CLOSE(f32_norm(&vx), 11585.237305, _EPSILON)
+  auto t2 = std::chrono::high_resolution_clock::now();
+
+  auto ms_int = std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1);
+  DEBUG_NUMBER(duration, ms_int.count());
+  ASSERT(ms_int.count() < 2000);
 
   LGTM
 }

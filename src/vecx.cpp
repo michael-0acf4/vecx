@@ -81,6 +81,26 @@ void vecx_type(sqlite3_context *ctx, int argc, sqlite3_value **argv) {
   }
 }
 
+void vecx_dq8(sqlite3_context *ctx, int argc, sqlite3_value **argv) {
+  if (argc != 1) {
+    sqlite3_result_null(ctx);
+    return;
+  }
+
+  const void *blob = sqlite3_value_blob(argv[0]);
+  uint64_t blob_size = sqlite3_value_bytes(argv[0]);
+  vecx qvec;
+  vecx_status status = vecx_parse_blob(blob, blob_size, &qvec);
+
+  if (status < 0)
+    vecx_emit_error(ctx, status);
+  else {
+    vecx vec = vecx_dequantize_to_f32(qvec);
+    // TODO: C++ vec.pack()
+    UNREACHABLE;
+  }
+}
+
 void vecx_norm(sqlite3_context *ctx, int argc, sqlite3_value **argv) {
   if (argc != 1) {
     sqlite3_result_null(ctx);
