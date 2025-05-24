@@ -36,7 +36,7 @@ double f32_norm(const vecx *v) {
     const size_t block = 256 / 8;
 
     __m256 vsum = _mm256_setzero_ps();
-    const auto &handler = [&](const __m256 &scaled) {
+    const auto &handler = [&](const size_t cursor, const __m256 &scaled) {
       __m256 squared = _mm256_mul_ps(scaled, scaled);
       vsum = _mm256_add_ps(vsum, squared);
     };

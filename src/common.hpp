@@ -46,6 +46,7 @@ inline void _cpu_dequantize_i8_single_vec_routine(size_t &offset, size_t block,
                                                   size_t size,
                                                   const quant_params &qparams,
                                                   Fn &&handler) {
+  size_t cursor = 0;
   for (; offset + block <= size; offset += block) {
     // https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#ig_expand=2,4079&text=_mm256_loadu_epi8
     // __m256i bytes = _mm256_loadu_epi8(data + i); // AVX512?
@@ -71,7 +72,8 @@ inline void _cpu_dequantize_i8_single_vec_routine(size_t &offset, size_t block,
       __m256 plus_zero_f = _mm256_cvtepi32_ps(plus_zero);
       __m256 scaled = _mm256_mul_ps(plus_zero_f, scale);
 
-      handler(scaled);
+      handler(cursor, scaled);
+      cursor++;
     }
   }
 }

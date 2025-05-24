@@ -87,14 +87,13 @@ vecx vecx_dequantize_to_f32(const vecx &v) {
 
   float_t *result = (float_t *)malloc(v.size * sizeof(float));
 
-  // size_t pos = 0;
-  // const auto handler = [&](const __m256 &scaled) {
-  //   // Note: i increments 'block' amount
-  //   _mm256_storeu_ps(result + pos, scaled);
-  //   pos += 4 * sizeof(float);
-  // };
-  // _cpu_dequantize_i8_single_vec_routine(i, block, data, v.size, v.qparams,
-  //                                       handler);
+  const auto handler = [&](const size_t cursor, const __m256 &scaled) {
+    // Note: i increments 'block' amount
+    // extX => 8 floats
+    _mm256_storeu_ps(result + cursor * 8, scaled);
+  };
+  _cpu_dequantize_i8_single_vec_routine(i, block, data, v.size, v.qparams,
+                                        handler);
 
   for (; i < v.size; i++)
     result[i] = _cpu_dequantize_i8(data[i], v.qparams);
