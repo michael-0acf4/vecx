@@ -60,25 +60,36 @@ TEST(eucl_norm_on_quantized_i8) {
 
 TEST(eucl_norm_on_huge_quantized_i8) {
   // Tensors often are around 100mb, 200mb, 1Gb
-  const size_t actual_size_mb = 1000;
-  const size_t size = actual_size_mb * 1048576;
+  const uint64_t actual_size_mb = 512u;
+  const uint64_t size = actual_size_mb * 1048576u;
   // stack is too small for large vectors
   std::unique_ptr<int8_t[]> data(new int8_t[size]);
 
-  for (int i = 0; i < size; i++) {
+  for (int i = 0; i < size; ++i) {
     data[i] = _cpu_quantize_i8(1.0, {1.0, -128});
   }
+
   auto t1 = std::chrono::high_resolution_clock::now();
   vecx qvx = {size, QINT_8, {1.0, -128}, data.get()};
-  ASSERT_CLOSE(f32_norm(&qvx), 11585.237305, _EPSILON);
+  ASSERT_CLOSE(f32_norm(&qvx), 23170.474609, _EPSILON)
 
+  // WARN: 4 * actual_size_mb more new allocations
   vecx vx = vecx_dequantize_to_f32(qvx);
-  ASSERT_CLOSE(f32_norm(&vx), 11585.237305, _EPSILON)
+  ASSERT_CLOSE(((float *)vx.data)[0], 1.0, _EPSILON)
+  ASSERT(vx.dtype == FLOAT_32)
+  ASSERT_CLOSE(f32_norm(&vx), 23170.474609, _EPSILON)
   auto t2 = std::chrono::high_resolution_clock::now();
 
   auto ms_int = std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1);
-  DEBUG_NUMBER(duration, ms_int.count());
-  ASSERT(ms_int.count() < 2000);
+
+  DEBUG_NUMBER(duration, ms_int.count())
+#ifdef ENABLE_CUDA_MODE
+  // RTX 3070
+  ASSERT(ms_int.count() < 900)
+#else
+  // SIMD is faster for reduce ops
+  ASSERT(ms_int.count() < 800)
+#endif
 
   LGTM
 }

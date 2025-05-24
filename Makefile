@@ -17,6 +17,7 @@ ifdef USE_CUDA
 	SRC_BACKEND = src/gpu.cu
 else
 	CC = g++
+#	CFLAGS = -std=c++14 -mavx512f fPIC -I./vendors/sqlite3
 	CFLAGS = -std=c++14 -mavx2 -fPIC -I./vendors/sqlite3
 	SRC_BACKEND = src/cpu.cpp
 endif
