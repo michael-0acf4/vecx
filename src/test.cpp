@@ -18,7 +18,7 @@ TEST(tests) {
 
 TEST(eucl_norm_basic) {
   float data[2] = {4.0, 3.0};
-  vecx v = {2, FLOAT_32, {}, data};
+  vecx v = {{2, FLOAT_32, {}}, data};
 
   ASSERT_CLOSE(f32_norm(&v), 5.0, 10e-6)
   LGTM
@@ -29,9 +29,8 @@ TEST(eucl_norm_huge) {
   float data[size];
   for (int i = 0; i < size; data[i++] = 1)
     ;
-  vecx v = {size, FLOAT_32, {}, data};
-  // DEBUG_NUMBER(eucl_norm_huge, f32_norm(&v))
-  ASSERT_CLOSE(f32_norm(&v), sqrt(static_cast<double>(v.size)), _EPSILON)
+  vecx v = {{size, FLOAT_32, {}}, data};
+  ASSERT_CLOSE(f32_norm(&v), sqrt(static_cast<double>(v.header.size)), _EPSILON)
 
   LGTM
 }
@@ -51,12 +50,63 @@ TEST(eucl_norm_on_quantized_i8) {
   int8_t qxs[10] = {-100, -71, -43, -15, 14, 42, 70, 99, 127, 127};
   quant_params qparams = {0.03529411764705882, -128};
 
-  vecx vx = {10, FLOAT_32, {}, xs};
-  vecx qvx = {10, QINT_8, qparams, qxs};
+  vecx vx = {{10, FLOAT_32, {}}, xs};
+  vecx qvx = {{10, QINT_8, qparams}, qxs};
   ASSERT_CLOSE(f32_norm(&vx), f32_norm(&qvx), 0.5)
 
   LGTM
 }
+
+TEST(utils_speed_packing) {
+  float xs[10] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
+  vecx_header header = {10, FLOAT_32, {}};
+  vecx vx = {header, xs};
+
+  size_t full_size = header.bytes_count_total();
+  std::unique_ptr<uint8_t[]> blob(new uint8_t[full_size]);
+  vecx_pack_into(vx, blob.get());
+
+  vecx same_vx;
+  vecx_status status =
+      vecx_parse_blob(blob.get(), header.bytes_count_total(), &same_vx);
+  ASSERT_EQ(status, VECX_OK)
+
+  ASSERT(vx.header.dtype == same_vx.header.dtype);
+  ASSERT(vx.header.size == same_vx.header.size);
+
+  LGTM
+}
+
+// TEST(parallel_scan) {
+// Tensors often are around 100mb, 200mb, 1Gb
+//   const uint64_t actual_size_mb = 512u;
+//   const uint64_t size = actual_size_mb * 1048576u;
+//   std::unique_ptr<int8_t[]> data(new int8_t[size]);
+
+//   for (int i = 0; i < size; ++i) {
+//     data[i] = _cpu_quantize_i8(1.0, {1.0, -128});
+//   }
+
+//   auto t1 = std::chrono::high_resolution_clock::now();
+//   vecx_header qheader = {size, QINT_8, {1.0, -128}};
+//   vecx qvx = {qheader, data.get()};
+//   ASSERT_CLOSE(f32_norm(&qvx), 23170.474609, _EPSILON)
+
+//   vecx_header header = {size, FLOAT_32, {0.0, 0}};
+//   size_t full_size = header.bytes_count_total();
+//   std::shared_ptr<uint8_t[]> blob(new uint8_t[full_size]);
+//   vecx_dequantize_to_f32(qvx, blob.get());
+
+//   vecx vx;
+//   vecx_parse_blob(blob.get(), full_size, &vx);
+
+//   double ans = f32_dot_float_x_quant(&vx, &qvx);
+
+//   DEBUG_NUMBER(_, ans);
+//   DEBUG_NUMBER(_, sqrt(ans));
+
+//   LGTM
+// }
 
 TEST(eucl_norm_on_huge_quantized_i8) {
   // Tensors often are around 100mb, 200mb, 1Gb
@@ -70,19 +120,30 @@ TEST(eucl_norm_on_huge_quantized_i8) {
   }
 
   auto t1 = std::chrono::high_resolution_clock::now();
-  vecx qvx = {size, QINT_8, {1.0, -128}, data.get()};
+  vecx_header qheader = {size, QINT_8, {1.0, -128}};
+  vecx qvx = {qheader, data.get()};
   ASSERT_CLOSE(f32_norm(&qvx), 23170.474609, _EPSILON)
 
   // WARN: 4 * actual_size_mb more new allocations
-  vecx vx = vecx_dequantize_to_f32(qvx);
+  vecx_header header = {size, FLOAT_32, {0.0, 0}};
+  size_t full_size = header.bytes_count_total();
+  std::shared_ptr<uint8_t[]> blob(new uint8_t[full_size]);
+  vecx_dequantize_to_f32(qvx, blob.get());
+
+  vecx vx;
+  vecx_parse_blob(blob.get(), full_size, &vx);
+
+  ASSERT(vx.header.size == size)
+  ASSERT(vx.header.dtype == FLOAT_32)
+  ASSERT(vx.header.qparams.zero == 0)
+
   ASSERT_CLOSE(((float *)vx.data)[0], 1.0, _EPSILON)
-  ASSERT(vx.dtype == FLOAT_32)
   ASSERT_CLOSE(f32_norm(&vx), 23170.474609, _EPSILON)
   auto t2 = std::chrono::high_resolution_clock::now();
 
   auto ms_int = std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1);
-
   DEBUG_NUMBER(duration, ms_int.count())
+
 #ifdef ENABLE_CUDA_MODE
   // RTX 3070
   ASSERT(ms_int.count() < 900)

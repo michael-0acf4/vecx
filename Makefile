@@ -2,18 +2,20 @@ ifeq ($(OS),Windows_NT)
 	OUTPUT = ./bin/vecx.dll
 	OUTPUT_TEST = ./bin/test.exe
 	mkdir_if_not_exists = if not exist "$(1)" mkdir "$(1)"
+# use of designated initializers requires '/std:c++20' on cl.exe
+# nvcc (cuda_12.2.r12.2) crashes on '/std:c++20' (but works on /std:c++latest)
+	CUDA_X_COMPILER = -Xcompiler="-DENABLE_CUDA_MODE /std:c++14"
 else
 	OUTPUT = ./bin/vecx
 	OUTPUT_TEST = ./bin/test
 	mkdir_if_not_exists = mkdir -p "$(1)"
+	CUDA_X_COMPILER = -Xcompiler="-DENABLE_CUDA_MODE -fPIC -std=c++14"
 endif
 
-# use of designated initializers requires '/std:c++20' on cl.exe
-# nvcc (cuda_12.2.r12.2) crashes on '/std:c++20' (but works on /std:c++latest)
 OPT = -O2
 ifdef USE_CUDA
 	CC = nvcc
-	CFLAGS = -Xcompiler="-DENABLE_CUDA_MODE /std:c++14" -I./vendors/sqlite3
+	CFLAGS = $(CUDA_X_COMPILER) -I./vendors/sqlite3
 	SRC_BACKEND = src/gpu.cu
 else
 	CC = g++

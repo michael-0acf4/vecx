@@ -34,6 +34,16 @@ for row in conn.execute("SELECT vecx_info()"):
 
 print("Simple data check")
 for row in conn.execute(
-    "SELECT vecx_size(a), vecx_type(a), vecx_norm(a), vecx_size(b), vecx_type(b), vecx_norm(b)  FROM Test"
+    """
+    SELECT 
+        vecx_size(vecx_dequantize(a)),
+        vecx_type(vecx_dequantize(a)),
+        vecx_norm(a),
+        vecx_size(vecx_dequantize(b)),
+        vecx_type(b),
+        vecx_norm(b),
+        vecx_norm(vecx_dequantize(b))
+    FROM Test
+    """
 ):
     print(f"Row: {row}")

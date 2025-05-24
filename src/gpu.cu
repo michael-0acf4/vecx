@@ -7,7 +7,6 @@ __device__ inline float maybe_dequantize(T value, const quant_params &)
 {
     return static_cast<float>(value);
 }
-// Fallback
 template <>
 __device__ inline float maybe_dequantize<int8_t>(int8_t value, const quant_params &qparams)
 {
@@ -49,10 +48,10 @@ __global__ void device_euclidean_norm_kernel(const T *data, uint64_t size, quant
 template <typename T>
 float f32_norm_host(const vecx *v)
 {
-    size_t type_size = vecx_type_size(v->dtype);
+    size_t type_size = vecx_type_size(v->header.dtype);
     T *d_data = nullptr;
-    cudaMalloc(&d_data, v->size * type_size);
-    cudaMemcpy((void *)d_data, v->data, v->size * type_size, cudaMemcpyHostToDevice);
+    cudaMalloc(&d_data, v->header.size * type_size);
+    cudaMemcpy((void *)d_data, v->data, v->header.size * type_size, cudaMemcpyHostToDevice);
 
     float *d_result = nullptr;
     cudaMalloc(&d_result, sizeof(float));
@@ -60,9 +59,9 @@ float f32_norm_host(const vecx *v)
 
     // Launch
     int threads = 256;
-    int blocks = (v->size + threads - 1) / threads;
+    int blocks = (v->header.size + threads - 1) / threads;
     size_t shared_size = threads * type_size;
-    device_euclidean_norm_kernel<<<blocks, threads, shared_size>>>(d_data, v->size, v->qparams, d_result);
+    device_euclidean_norm_kernel<<<blocks, threads, shared_size>>>(d_data, v->header.size, v->header.qparams, d_result);
     cudaDeviceSynchronize();
 
     float h_result = 0;
@@ -76,7 +75,7 @@ float f32_norm_host(const vecx *v)
 
 float f32_norm(const vecx *v)
 {
-    return v->dtype == FLOAT_32 ? f32_norm_host<float>(v) : f32_norm_host<int8_t>(v);
+    return v->header.dtype == FLOAT_32 ? f32_norm_host<float>(v) : f32_norm_host<int8_t>(v);
 }
 
 // CUDA context init often skew test duration without this trick

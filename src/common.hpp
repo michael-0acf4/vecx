@@ -13,6 +13,7 @@
   } while (0)
 
 typedef enum vecx_dtype { FLOAT_32 = 1, QINT_8 = 2 } vecx_dtype;
+uint64_t vecx_type_size(const vecx_dtype &dtype);
 
 typedef enum vecx_status {
   VECX_OK = 0,
@@ -29,16 +30,74 @@ typedef struct quant_params {
   int32_t zero;
 } quant_params;
 
-typedef struct vecx {
+typedef struct vecx_header {
   uint64_t size;
   vecx_dtype dtype;
   quant_params qparams;
+
+  inline size_t bytes_count_data_region() const {
+    return vecx_type_size(dtype) * size;
+  }
+
+  inline size_t bytes_count_total() const {
+    return vecx_header::canon_size() + bytes_count_data_region();
+  }
+
+  static inline size_t canon_size() { return 4 /*vecx*/ + 8 + 1 + (4 + 4); }
+} vecx_header;
+
+typedef struct vecx {
+  vecx_header header;
   const void *data;
 } vecx;
 
-vecx_status vecx_parse_blob(const void *blob, int blob_size, vecx *out_vecx);
-uint64_t vecx_type_size(const vecx_dtype &dtype);
-vecx vecx_dequantize_to_f32(const vecx &v);
+vecx_status vecx_parse_blob(const void *blob, size_t blob_size, vecx *out_vecx);
+void *vecx_allocate_blob(const vecx_header &header);
+
+// Note: ownership of heap data is up to the caller
+// The reason of this design is that sqlite has its own allocator
+// An alternative cleaner implementation would have been a std::function or
+// function pointer but even then function signature may diverge (e.g.
+// sqlite3_malloc only accepts int as memory size)
+
+void vecx_dequantize_to_f32(const vecx &v, void *dest);
+
+// Pack vecx header and return the memory addresss coming after it.
+// The caller must ensure that dest is of the correct size.
+void *vecx_pack_header_into(const vecx_header &header, void *dest);
+
+// Pack vecx vector into dest
+// The caller must ensure that dest is of the correct size.
+void vecx_pack_into(const vecx &v_src, void *dest);
+
+template <typename Fn>
+inline void _cpu_dequantize_fast(const __m256i &bytes_32xi8, size_t &cursor,
+                                 const quant_params &qparams, Fn &&handler) {
+
+  // Note: cast are 'logical' (just like static_cast)
+  //    [32 i8 -> 16 i8 + 16 i8]
+  // -> [32 i8 -> [ [16 i8 ~> [8 i32] + [8 i32]] ] + [...]]
+  // -> [32 i8 -> [ [16 i8 ~> [8 i32] + [8 i32]] ] + [...]]
+
+  __m128i low = _mm256_castsi256_si128(bytes_32xi8);
+  __m256i ext0 = _mm256_cvtepi8_epi32(low);
+  __m256i ext1 = _mm256_cvtepi8_epi32(_mm_bsrli_si128(low, 8));
+
+  __m128i high = _mm256_extracti128_si256(bytes_32xi8, 1);
+  __m256i ext2 = _mm256_cvtepi8_epi32(high);
+  __m256i ext3 = _mm256_cvtepi8_epi32(_mm_bsrli_si128(high, 8));
+
+  __m256 scale = _mm256_set1_ps(qparams.scale);
+  __m256i zp_vec = _mm256_set1_epi32(qparams.zero);
+  for (const __m256i &packed_i32 : {ext0, ext1, ext2, ext3}) {
+    __m256i plus_zero = _mm256_sub_epi32(packed_i32, zp_vec);
+    __m256 plus_zero_f = _mm256_cvtepi32_ps(plus_zero);
+    __m256 scaled = _mm256_mul_ps(plus_zero_f, scale);
+
+    handler(cursor, scaled);
+    cursor++;
+  }
+}
 
 template <typename Fn>
 inline void _cpu_dequantize_i8_single_vec_routine(size_t &offset, size_t block,
@@ -50,31 +109,9 @@ inline void _cpu_dequantize_i8_single_vec_routine(size_t &offset, size_t block,
   for (; offset + block <= size; offset += block) {
     // https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#ig_expand=2,4079&text=_mm256_loadu_epi8
     // __m256i bytes = _mm256_loadu_epi8(data + i); // AVX512?
-    __m256i bytes = _mm256_loadu_si256(reinterpret_cast<__m256i const *>(
+    __m256i bytes_32xi8 = _mm256_loadu_si256(reinterpret_cast<__m256i const *>(
         data + offset)); // ! packed 8 * 32 int32
-
-    // 32 int32 -> 16 int32 + 16 int32
-    __m128i low = _mm256_castsi256_si128(bytes);
-    __m128i high = _mm256_extracti128_si256(bytes, 1);
-
-    // Note: cast are 'logical' (just like static_cast)
-    // [16 int32 -> [8 int32] + [8 int32]]
-    // + [16 int32 -> [8 int32] + [8 int32]]
-    __m256i ext0 = _mm256_cvtepi8_epi32(low);
-    __m256i ext1 = _mm256_cvtepi8_epi32(_mm_bsrli_si128(low, 8));
-    __m256i ext2 = _mm256_cvtepi8_epi32(high);
-    __m256i ext3 = _mm256_cvtepi8_epi32(_mm_bsrli_si128(high, 8));
-
-    __m256 scale = _mm256_set1_ps(qparams.scale);
-    __m256i zp_vec = _mm256_set1_epi32(qparams.zero);
-    for (const __m256i &packed_i32 : {ext0, ext1, ext2, ext3}) {
-      __m256i plus_zero = _mm256_sub_epi32(packed_i32, zp_vec);
-      __m256 plus_zero_f = _mm256_cvtepi32_ps(plus_zero);
-      __m256 scaled = _mm256_mul_ps(plus_zero_f, scale);
-
-      handler(cursor, scaled);
-      cursor++;
-    }
+    _cpu_dequantize_fast(bytes_32xi8, cursor, qparams, handler);
   }
 }
 

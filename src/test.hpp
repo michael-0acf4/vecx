@@ -32,6 +32,18 @@ static const std::string yellow(const std::string &s) {
     return oss.str();                                                          \
   }
 
+#define ASSERT_EQ(left, right)                                                 \
+  if ((left != right)) {                                                       \
+    std::ostringstream oss;                                                    \
+    std::string sleft =                                                        \
+        "\n   " + yellow(#left) + " (" + std::to_string(left) + ")";           \
+    std::string sright =                                                       \
+        " vs " + yellow(#right) + " (" + std::to_string(right) + ")";          \
+    oss << red("  Assertion failed: (EQ)") << sleft << " vs " << sright        \
+        << " at " << __FILE__ << ":" << __LINE__ << "\n";                      \
+    return oss.str();                                                          \
+  }
+
 #define _EPSILON 10e-6
 #define ASSERT_CLOSE(left, right, precision)                                   \
   if (!(fabs(left - right) <= precision)) {                                    \

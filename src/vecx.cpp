@@ -50,7 +50,7 @@ void vecx_size(sqlite3_context *ctx, int argc, sqlite3_value **argv) {
   if (status < 0)
     vecx_emit_error(ctx, status);
   else
-    sqlite3_result_int64(ctx, (int64_t)vec.size);
+    sqlite3_result_int64(ctx, (int64_t)vec.header.size);
 }
 
 void vecx_type(sqlite3_context *ctx, int argc, sqlite3_value **argv) {
@@ -67,7 +67,7 @@ void vecx_type(sqlite3_context *ctx, int argc, sqlite3_value **argv) {
   if (status < 0)
     vecx_emit_error(ctx, status);
   else {
-    switch (vec.dtype) {
+    switch (vec.header.dtype) {
     case FLOAT_32:
       sqlite3_result_text(ctx, "F32", -1, SQLITE_STATIC);
       break;
@@ -81,7 +81,7 @@ void vecx_type(sqlite3_context *ctx, int argc, sqlite3_value **argv) {
   }
 }
 
-void vecx_dq8(sqlite3_context *ctx, int argc, sqlite3_value **argv) {
+void vecx_dequantize(sqlite3_context *ctx, int argc, sqlite3_value **argv) {
   if (argc != 1) {
     sqlite3_result_null(ctx);
     return;
@@ -95,9 +95,11 @@ void vecx_dq8(sqlite3_context *ctx, int argc, sqlite3_value **argv) {
   if (status < 0)
     vecx_emit_error(ctx, status);
   else {
-    vecx vec = vecx_dequantize_to_f32(qvec);
-    // TODO: C++ vec.pack()
-    UNREACHABLE;
+    size_t size = vecx_header::canon_size() + qvec.header.size * sizeof(float);
+    void *blob = sqlite3_malloc(size);
+    vecx_dequantize_to_f32(qvec, blob);
+
+    sqlite3_result_blob(ctx, blob, size, sqlite3_free);
   }
 }
 
@@ -154,8 +156,12 @@ EXPORT int sqlite3_vecx_init(sqlite3 *db, char **pzErrMsg,
   sqlite3_create_function(db, "vecx_norm", 1,
                           SQLITE_UTF8 | SQLITE_DETERMINISTIC, 0, vecx_norm, 0,
                           0);
+  sqlite3_create_function(db, "vecx_dequantize", 1,
+                          SQLITE_UTF8 | SQLITE_DETERMINISTIC, 0,
+                          vecx_dequantize, 0, 0);
   sqlite3_create_function(db, "vecx_info", 0,
                           SQLITE_UTF8 | SQLITE_DETERMINISTIC, 0, vecx_info, 0,
                           0);
+
   return SQLITE_OK;
 }
