@@ -94,6 +94,7 @@ TEST(binary_operation_f32) {
 
   vecx out;
   vecx_parse_blob(dest.get(), dest_blob_size, &out);
+  ASSERT_EQ(out.item_as<float>(1), 1.0)
   ASSERT_EQ(out.item_as<float>(4), 16.0)
   ASSERT_EQ(out.item_as<float>(625), 390625)
 
@@ -102,24 +103,35 @@ TEST(binary_operation_f32) {
 
 TEST(binary_operation_qi8) {
   const uint64_t size = 727;
-  vecx_header qheader = {size, QINT_8, {}};
+  vecx_header qheader = {size, QINT_8, {2.847058823529412, -128}};
   std::unique_ptr<int8_t[]> qdata(new int8_t[size]);
   for (int i = 0; i < size; ++i) {
-    qdata[i] = _cpu_quantize_i8(1.0 * i, {2.847058823529412, -128});
+    qdata[i] = _cpu_quantize_i8(i, qheader.qparams);
   }
   vecx qvx = {qheader, qdata.get()};
+  ASSERT_EQ(qvx.item_as<int8_t>(0), -128);
+  ASSERT_EQ(qvx.item_as<int8_t>(size - 1), 127);
+  ASSERT_CLOSE(_cpu_dequantize_i8(qvx.item_as<int8_t>(123), qheader.qparams),
+               122.423531, _EPSILON);
+  ASSERT_EQ(_cpu_dequantize_i8(qvx.item_as<int8_t>(size - 1), qheader.qparams),
+            726.0);
 
-  // qi8 x qi8
   vecx_header dest_header = {size, FLOAT_32, {}};
   size_t dest_blob_size = dest_header.bytes_count_total();
   std::unique_ptr<int8_t[]> dest(new int8_t[dest_blob_size]);
   vecx_status mstatus = vecx_mult(&qvx, &qvx, dest.get());
   ASSERT_EQ(mstatus, VECX_OK)
 
-  // vecx out;
-  // vecx_parse_blob(dest.get(), dest_blob_size, &out);
-  // ASSERT_EQ(out.item_as<float>(4), 16.0)
-  // ASSERT_EQ(out.item_as<float>(625), 390625)
+  vecx out;
+  vecx_parse_blob(dest.get(), dest_blob_size, &out);
+  ASSERT_CLOSE(out.item_as<float>(4),
+               (_cpu_dequantize_i8(qvx.item_as<int8_t>(4), qvx.header.qparams) *
+                _cpu_dequantize_i8(qvx.item_as<int8_t>(4), qvx.header.qparams)),
+               _EPSILON);
+
+  ASSERT_EQ(out.item_as<float>(625),
+            (_cpu_dequantize_i8(qvx.item_as<int8_t>(625), qvx.header.qparams) *
+             _cpu_dequantize_i8(qvx.item_as<int8_t>(625), qvx.header.qparams)))
 
   LGTM
 }

@@ -35,7 +35,7 @@ double f32_norm(const vecx *v) {
   double sum = 0.0f;
   switch (v->header.dtype) {
   case FLOAT_32: {
-    const float *data = static_cast<const float *>(v->data);
+    const float *data = v->data_as<float>();
     uint64_t i = 0;
     const size_t block = 256 / 32;
 
@@ -53,14 +53,13 @@ double f32_norm(const vecx *v) {
     for (size_t j = 0; j < 8; ++j)
       sum += tmp[j];
 
-    // rest
     for (; i < v->header.size; ++i)
       sum += data[i] * data[i];
 
     break;
   }
   case QINT_8: {
-    const int8_t *data = static_cast<const int8_t *>(v->data);
+    const int8_t *data = v->data_as<int8_t>();
     size_t i = 0;
     const size_t block = 256 / 8;
 
@@ -83,12 +82,10 @@ double f32_norm(const vecx *v) {
     for (size_t j = 0; j < 8; ++j)
       sum += tmp[j];
 
-    // rest
     for (; i < v->header.size; ++i) {
       float value = _cpu_dequantize_i8(data[i], v->header.qparams);
       sum += value * value;
     }
-
     break;
   }
   default:
@@ -99,10 +96,8 @@ double f32_norm(const vecx *v) {
 }
 
 // Binary Ops
-inline vecx_status
-_cpu_op_apply(std::function<__m256(const __m256 &, const __m256 &)> op_simd,
-              std::function<float(const float &, const float &)> op_trivial,
-              const vecx *a, const vecx *b, void *dest) {
+template <__m256 (*op_simd)(__m256, __m256), float (*op_trivial)(float, float)>
+inline vecx_status _cpu_op_apply(const vecx *a, const vecx *b, void *dest) {
   if (a->header.dtype != b->header.dtype) {
     return a->header.dtype == FLOAT_32 ? VECX_ERR_BAD_OP_F32_X_QI8
                                        : VECX_ERR_BAD_OP_QI8_X_F32;
@@ -116,7 +111,6 @@ _cpu_op_apply(std::function<__m256(const __m256 &, const __m256 &)> op_simd,
 
   vecx_header header = {size, FLOAT_32, {}};
   float *result = (float *)vecx_pack_header_into(header, dest);
-  std::printf("dsads");
 
   switch (dtype) {
   case FLOAT_32: {
@@ -138,8 +132,8 @@ _cpu_op_apply(std::function<__m256(const __m256 &, const __m256 &)> op_simd,
     break;
   }
   case QINT_8: {
-    const uint8_t *a_data = static_cast<const uint8_t *>(a->data);
-    const uint8_t *b_data = static_cast<const uint8_t *>(b->data);
+    const int8_t *a_data = a->data_as<int8_t>();
+    const int8_t *b_data = b->data_as<int8_t>();
     size_t i = 0;
     const size_t block = 256 / 8;
 
@@ -156,15 +150,19 @@ _cpu_op_apply(std::function<__m256(const __m256 &, const __m256 &)> op_simd,
           _cpu_dequantize_fast(b_bytes_32xi8, b->header.qparams);
 
       for (int j = 0; j < 4; ++j) {
+        __m256 op_res0 = _mm256_mul_ps(a_chunks[j], b_chunks[j]);
         __m256 op_res = op_simd(a_chunks[j], b_chunks[j]);
         _mm256_storeu_ps(result + cursor, op_res);
+
         cursor += 8 /*floats*/;
       }
     }
 
     size_t k = cursor;
-    for (; k < size; ++k)
-      result[k] = op_trivial(a_data[k], b_data[k]);
+    for (; k < size; ++k) {
+      result[k] = op_trivial(_cpu_dequantize_i8(a_data[k], a->header.qparams),
+                             _cpu_dequantize_i8(b_data[k], b->header.qparams));
+    }
     break;
   }
   default:
@@ -174,36 +172,36 @@ _cpu_op_apply(std::function<__m256(const __m256 &, const __m256 &)> op_simd,
   return VECX_OK;
 }
 
+// Note:
+// SIMD _mm256_mul_ps wrapped within a Lambda for example crash when passed as
+// argument, ideally we want to inline any SIMD
+
+inline __m256 add_simd(__m256 a, __m256 b) { return _mm256_add_ps(a, b); }
+inline float add_trivial(float a, float b) { return a + b; }
+
+inline __m256 sub_simd(__m256 a, __m256 b) { return _mm256_sub_ps(a, b); }
+inline float sub_trivial(float a, float b) { return a - b; }
+
+inline __m256 mul_simd(__m256 a, __m256 b) { return _mm256_mul_ps(a, b); }
+inline float mul_trivial(float a, float b) { return a * b; }
+
+inline __m256 div_simd(__m256 a, __m256 b) { return _mm256_div_ps(a, b); }
+inline float div_trivial(float a, float b) { return a / b; }
+
 vecx_status vecx_add(const vecx *a, const vecx *b, void *dest) {
-  const auto binop = [](const __m256 &a, const __m256 &b) {
-    return _mm256_add_ps(a, b);
-  };
-  const auto op_trivial = [](const float &a, const float &b) { return a + b; };
-  return _cpu_op_apply(binop, op_trivial, a, b, dest);
+  return _cpu_op_apply<add_simd, add_trivial>(a, b, dest);
 }
 
 vecx_status vecx_sub(const vecx *a, const vecx *b, void *dest) {
-  const auto op_simd = [](const __m256 &a, const __m256 &b) {
-    return _mm256_sub_ps(a, b);
-  };
-  const auto op_trivial = [](const float &a, const float &b) { return a - b; };
-  return _cpu_op_apply(op_simd, op_trivial, a, b, dest);
+  return _cpu_op_apply<sub_simd, sub_trivial>(a, b, dest);
 }
 
 vecx_status vecx_mult(const vecx *a, const vecx *b, void *dest) {
-  const auto op_simd = [](const __m256 &a, const __m256 &b) {
-    return _mm256_mul_ps(a, b);
-  };
-  const auto op_trivial = [](const float &a, const float &b) { return a * b; };
-  return _cpu_op_apply(op_simd, op_trivial, a, b, dest);
+  return _cpu_op_apply<mul_simd, mul_trivial>(a, b, dest);
 }
 
 vecx_status vecx_div(const vecx *a, const vecx *b, void *dest) {
-  const auto op_simd = [](const __m256 &a, const __m256 &b) {
-    return _mm256_div_ps(a, b);
-  };
-  const auto op_trivial = [](const float &a, const float &b) { return a / b; };
-  return _cpu_op_apply(op_simd, op_trivial, a, b, dest);
+  return _cpu_op_apply<div_simd, div_trivial>(a, b, dest);
 }
 
 void init_device() {}
