@@ -98,12 +98,9 @@ double f32_norm(const vecx *v) {
 // Binary Ops
 template <__m256 (*op_simd)(__m256, __m256), float (*op_trivial)(float, float)>
 inline vecx_status _cpu_op_apply(const vecx *a, const vecx *b, void *dest) {
-  if (a->header.dtype != b->header.dtype) {
-    return a->header.dtype == FLOAT_32 ? VECX_ERR_BAD_OP_F32_X_QI8
-                                       : VECX_ERR_BAD_OP_QI8_X_F32;
-  }
-  if (a->header.size != b->header.size) {
-    return VECX_ERR_BAD_OP_BAD_SIZE;
+  vecx_status check = validate_layout_similarities(a, b);
+  if (check != VECX_OK) {
+    return check;
   }
 
   const vecx_dtype dtype = a->header.dtype;
@@ -149,12 +146,9 @@ inline vecx_status _cpu_op_apply(const vecx *a, const vecx *b, void *dest) {
       std::array<__m256, 4> b_chunks =
           _cpu_dequantize_fast(b_bytes_32xi8, b->header.qparams);
 
-      for (int j = 0; j < 4; ++j) {
-        __m256 op_res0 = _mm256_mul_ps(a_chunks[j], b_chunks[j]);
+      for (int j = 0; j < 4; ++j, cursor += 8 /*floats*/) {
         __m256 op_res = op_simd(a_chunks[j], b_chunks[j]);
         _mm256_storeu_ps(result + cursor, op_res);
-
-        cursor += 8 /*floats*/;
       }
     }
 
@@ -173,7 +167,7 @@ inline vecx_status _cpu_op_apply(const vecx *a, const vecx *b, void *dest) {
 }
 
 // Note:
-// SIMD _mm256_mul_ps wrapped within a Lambda for example crash when passed as
+// SIMD _mm256_mul_ps wrapped within a Lambda for example crashes when passed as
 // argument, ideally we want to inline any SIMD
 
 inline __m256 add_simd(__m256 a, __m256 b) { return _mm256_add_ps(a, b); }

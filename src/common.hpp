@@ -99,3 +99,15 @@ inline int8_t _cpu_quantize_i8(float value, const quant_params &qparams) {
       std::fmin(INT8_MAX, std::round(value / qparams.scale + qparams.zero)),
       INT8_MIN));
 }
+
+inline vecx_status validate_layout_similarities(const vecx *a, const vecx *b) {
+  if (a->header.dtype != b->header.dtype) {
+    return a->header.dtype == FLOAT_32 ? VECX_ERR_BAD_OP_F32_X_QI8
+                                       : VECX_ERR_BAD_OP_QI8_X_F32;
+  }
+  if (a->header.size != b->header.size) {
+    return VECX_ERR_BAD_OP_BAD_SIZE;
+  }
+
+  return VECX_OK;
+}

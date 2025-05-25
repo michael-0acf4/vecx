@@ -5,6 +5,12 @@ from vecx_spec import Vecx
 a = Vecx([1.0, 2.0, 3.0, 4.0, 5.0, 6.0], auto_quantize=True)
 b = Vecx([1.0] * (625 * 625), auto_quantize=True)
 
+print(b.dequantize_to_vec_f32().np_data)
+
+c = Vecx(list(range(727)), auto_quantize=True)
+print(c.scale, c.zero)
+exit(0)
+
 conn = sqlite3.connect(":memory:")
 conn.enable_load_extension(True)  # !
 

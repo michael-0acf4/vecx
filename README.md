@@ -32,7 +32,7 @@ make build USE_CUDA=1
   - [x] Multiply
   - [x] Division
   - [ ] Scalar multiplication (left, right)
-- [ ] Inline vector definition: `vecx_inline('-4, 9, 0.00, 4.6', 'f32')`
-- [ ] Explicit logical type promotion (e.g. i64 -> f32)
 - [ ] Dot product
+- [ ] Inline vector definition: `vecx_inline('-4, 9, 0.00, 4.6', 'f32')`
+- [ ] Type conversion
 - [ ] Vector folding `vecx_fold('+' | '-' | '/' | '*', blob, init)`
