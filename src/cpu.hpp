@@ -2,6 +2,10 @@
 #include "common.hpp"
 
 double f32_norm(const vecx *v);
-double f32_dot_float_x_quant(const vecx *a_float, const vecx *b_quant);
+
+vecx_status vecx_add(const vecx *a, const vecx *b, void *dest);
+vecx_status vecx_sub(const vecx *a, const vecx *b, void *dest);
+vecx_status vecx_mult(const vecx *a, const vecx *b, void *dest);
+vecx_status vecx_div(const vecx *a, const vecx *b, void *dest);
 
 void init_device();

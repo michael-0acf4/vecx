@@ -39,8 +39,8 @@ static const std::string yellow(const std::string &s) {
         "\n   " + yellow(#left) + " (" + std::to_string(left) + ")";           \
     std::string sright =                                                       \
         " vs " + yellow(#right) + " (" + std::to_string(right) + ")";          \
-    oss << red("  Assertion failed: (EQ)") << sleft << " vs " << sright        \
-        << " at " << __FILE__ << ":" << __LINE__ << "\n";                      \
+    oss << red("  Assertion failed: (EQ)") << sleft + sright << " at "         \
+        << __FILE__ << ":" << __LINE__ << "\n";                                \
     return oss.str();                                                          \
   }
 
@@ -53,7 +53,7 @@ static const std::string yellow(const std::string &s) {
     std::string sright =                                                       \
         " vs " + yellow(#right) + " (" + std::to_string(right) + ")";          \
                                                                                \
-    oss << red("  Assertion failed (close): ") << sleft << sright << "\n  at " \
+    oss << red("  Assertion failed (close): ") << sleft + sright << "\n  at "  \
         << __FILE__ << ":" << __LINE__ << "\n";                                \
     return oss.str();                                                          \
   }

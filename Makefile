@@ -9,7 +9,7 @@ else
 	OUTPUT = ./bin/vecx
 	OUTPUT_TEST = ./bin/test
 	mkdir_if_not_exists = mkdir -p "$(1)"
-	CUDA_X_COMPILER = -Xcompiler="-DENABLE_CUDA_MODE -fPIC -std=c++14"
+	CUDA_X_COMPILER =  -Xcompiler="-Wignored-attributes -DENABLE_CUDA_MODE -fPIC -std=c++14"
 endif
 
 OPT = -O2
@@ -20,7 +20,7 @@ ifdef USE_CUDA
 else
 	CC = g++
 #	CFLAGS = -std=c++14 -mavx512f fPIC -I./vendors/sqlite3
-	CFLAGS = -std=c++14 -mavx2 -fPIC -I./vendors/sqlite3
+	CFLAGS = -Wignored-attributes -std=c++14 -mavx2 -fPIC -I./vendors/sqlite3
 	SRC_BACKEND = src/cpu.cpp
 endif
 

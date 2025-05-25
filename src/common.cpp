@@ -93,13 +93,19 @@ void vecx_dequantize_to_f32(const vecx &v, void *dest) {
   vecx_header header = {v.header.size, FLOAT_32, {}};
   float_t *result = (float_t *)vecx_pack_header_into(header, dest);
 
-  const auto handler = [&](const size_t cursor, const __m256 &scaled) {
-    // Note: i increments 'block' amount
-    // extX => 8 floats
-    _mm256_storeu_ps(result + cursor * 8, scaled);
-  };
-  _cpu_dequantize_i8_single_vec_routine(i, block, data, v.header.size,
-                                        v.header.qparams, handler);
+  size_t cursor = 0;
+  for (; i + block <= v.header.size; i += block) {
+    __m256i bytes_32xi8 =
+        _mm256_loadu_si256(reinterpret_cast<__m256i const *>(data + i));
+
+    for (const __m256 &ext_8xf32 :
+         _cpu_dequantize_fast(bytes_32xi8, v.header.qparams)) {
+      // Note: i increments 'block' amount
+      // extX => 8 floats
+      _mm256_storeu_ps(result + cursor * 8, ext_8xf32);
+      cursor++;
+    }
+  }
 
   for (; i < v.header.size; i++)
     result[i] = _cpu_dequantize_i8(data[i], v.header.qparams);
@@ -128,4 +134,35 @@ void *vecx_pack_header_into(const vecx_header &header, void *dest) {
 void vecx_pack_into(const vecx &v_src, void *dest) {
   void *next = vecx_pack_header_into(v_src.header, dest);
   memcpy(next, v_src.data, v_src.header.bytes_count_data_region());
+}
+
+std::array<__m256, 4> _cpu_dequantize_fast(const __m256i &bytes_32xi8,
+                                           const quant_params &qparams) {
+  // Note: cast are 'logical' (just like static_cast)
+  //    [32 i8 -> 16 i8 + 16 i8]
+  // -> [32 i8 -> [ [16 i8 ~> [8 i32] + [8 i32]] ] + [...]]
+  // -> [32 i8 -> [ [16 i8 ~> [8 i32] + [8 i32]] ] + [...]]
+
+  __m128i low = _mm256_castsi256_si128(bytes_32xi8);
+  __m256i ext0 = _mm256_cvtepi8_epi32(low);
+  __m256i ext1 = _mm256_cvtepi8_epi32(_mm_bsrli_si128(low, 8));
+
+  __m128i high = _mm256_extracti128_si256(bytes_32xi8, 1);
+  __m256i ext2 = _mm256_cvtepi8_epi32(high);
+  __m256i ext3 = _mm256_cvtepi8_epi32(_mm_bsrli_si128(high, 8));
+
+  __m256 scale = _mm256_set1_ps(qparams.scale);
+  __m256i zp_vec = _mm256_set1_epi32(qparams.zero);
+
+  std::array<__m256, 4> out;
+  size_t i = 0;
+  for (const __m256i &packed_i32 : {ext0, ext1, ext2, ext3}) {
+    __m256i plus_zero = _mm256_sub_epi32(packed_i32, zp_vec);
+    __m256 plus_zero_f = _mm256_cvtepi32_ps(plus_zero);
+    __m256 scaled = _mm256_mul_ps(plus_zero_f, scale);
+
+    out[i++] = scaled;
+  }
+
+  return out;
 }

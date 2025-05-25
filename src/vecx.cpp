@@ -29,6 +29,17 @@ void vecx_emit_error(sqlite3_context *ctx, vecx_status status) {
     sqlite3_result_error(
         ctx, "Underlying vecx object has an invalid reported size", -1);
     break;
+  case VECX_ERR_BAD_OP_F32_X_QI8:
+    sqlite3_result_error(ctx, "Cannot directly operate F32 and QI8", -1);
+    break;
+  case VECX_ERR_BAD_OP_QI8_X_F32:
+    sqlite3_result_error(ctx, "Cannot directly operate QI8 and F32", -1);
+    break;
+  case VECX_ERR_BAD_OP_BAD_SIZE:
+    sqlite3_result_error(
+        ctx, "Cannot directly operate between two vectors of different size",
+        -1);
+    break;
   case VECX_ERR_GENERIC:
   default:
     sqlite3_result_error(ctx, "Unknown error while processing vecx object", -1);

@@ -1,8 +1,10 @@
 #pragma once
 
+#include <array>
 #include <cassert>
 #include <cmath>
 #include <cstdint>
+#include <functional>
 #include <immintrin.h>
 #include <iostream>
 
@@ -22,6 +24,9 @@ typedef enum vecx_status {
   VECX_ERR_INVALID_SIZE = -3,
   VECX_ERR_UNKNOWN_DTYPE = -4,
   VECX_ERR_RECOVER_NULL = -5,
+  VECX_ERR_BAD_OP_F32_X_QI8 = -6,
+  VECX_ERR_BAD_OP_QI8_X_F32 = -7,
+  VECX_ERR_BAD_OP_BAD_SIZE = -8,
   VECX_ERR_GENERIC = -1000,
 } vecx_status;
 
@@ -49,6 +54,14 @@ typedef struct vecx_header {
 typedef struct vecx {
   vecx_header header;
   const void *data;
+
+  template <typename T> inline const T *data_as() const {
+    return reinterpret_cast<const T *>(data);
+  }
+
+  template <typename T> inline T item_as(size_t pos) const {
+    return reinterpret_cast<const T *>(data)[pos];
+  }
 } vecx;
 
 vecx_status vecx_parse_blob(const void *blob, size_t blob_size, vecx *out_vecx);
@@ -70,52 +83,11 @@ void *vecx_pack_header_into(const vecx_header &header, void *dest);
 // The caller must ensure that dest is of the correct size.
 void vecx_pack_into(const vecx &v_src, void *dest);
 
-template <typename Fn>
-inline void _cpu_dequantize_fast(const __m256i &bytes_32xi8, size_t &cursor,
-                                 const quant_params &qparams, Fn &&handler) {
+// Dequantize a 256 block that packs 32 int8
+std::array<__m256, 4> _cpu_dequantize_fast(const __m256i &bytes_32xi8,
+                                           const quant_params &qparams);
 
-  // Note: cast are 'logical' (just like static_cast)
-  //    [32 i8 -> 16 i8 + 16 i8]
-  // -> [32 i8 -> [ [16 i8 ~> [8 i32] + [8 i32]] ] + [...]]
-  // -> [32 i8 -> [ [16 i8 ~> [8 i32] + [8 i32]] ] + [...]]
-
-  __m128i low = _mm256_castsi256_si128(bytes_32xi8);
-  __m256i ext0 = _mm256_cvtepi8_epi32(low);
-  __m256i ext1 = _mm256_cvtepi8_epi32(_mm_bsrli_si128(low, 8));
-
-  __m128i high = _mm256_extracti128_si256(bytes_32xi8, 1);
-  __m256i ext2 = _mm256_cvtepi8_epi32(high);
-  __m256i ext3 = _mm256_cvtepi8_epi32(_mm_bsrli_si128(high, 8));
-
-  __m256 scale = _mm256_set1_ps(qparams.scale);
-  __m256i zp_vec = _mm256_set1_epi32(qparams.zero);
-  for (const __m256i &packed_i32 : {ext0, ext1, ext2, ext3}) {
-    __m256i plus_zero = _mm256_sub_epi32(packed_i32, zp_vec);
-    __m256 plus_zero_f = _mm256_cvtepi32_ps(plus_zero);
-    __m256 scaled = _mm256_mul_ps(plus_zero_f, scale);
-
-    handler(cursor, scaled);
-    cursor++;
-  }
-}
-
-template <typename Fn>
-inline void _cpu_dequantize_i8_single_vec_routine(size_t &offset, size_t block,
-                                                  const int8_t *data,
-                                                  size_t size,
-                                                  const quant_params &qparams,
-                                                  Fn &&handler) {
-  size_t cursor = 0;
-  for (; offset + block <= size; offset += block) {
-    // https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#ig_expand=2,4079&text=_mm256_loadu_epi8
-    // __m256i bytes = _mm256_loadu_epi8(data + i); // AVX512?
-    __m256i bytes_32xi8 = _mm256_loadu_si256(reinterpret_cast<__m256i const *>(
-        data + offset)); // ! packed 8 * 32 int32
-    _cpu_dequantize_fast(bytes_32xi8, cursor, qparams, handler);
-  }
-}
-
-inline float _cpu_dequantize_i8(int8_t value, const quant_params &qparams);
+// inline float _cpu_dequantize_i8(int8_t value, const quant_params &qparams);
 inline float _cpu_dequantize_i8(int8_t value, const quant_params &qparams) {
   return qparams.scale *
          static_cast<float>(static_cast<int32_t>(value) - qparams.zero);

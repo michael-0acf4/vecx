@@ -62,8 +62,8 @@ TEST(utils_speed_packing) {
   vecx_header header = {10, FLOAT_32, {}};
   vecx vx = {header, xs};
 
-  size_t full_size = header.bytes_count_total();
-  std::unique_ptr<uint8_t[]> blob(new uint8_t[full_size]);
+  size_t dest_blob_size = header.bytes_count_total();
+  std::unique_ptr<uint8_t[]> blob(new uint8_t[dest_blob_size]);
   vecx_pack_into(vx, blob.get());
 
   vecx same_vx;
@@ -77,36 +77,52 @@ TEST(utils_speed_packing) {
   LGTM
 }
 
-// TEST(parallel_scan) {
-// Tensors often are around 100mb, 200mb, 1Gb
-//   const uint64_t actual_size_mb = 512u;
-//   const uint64_t size = actual_size_mb * 1048576u;
-//   std::unique_ptr<int8_t[]> data(new int8_t[size]);
+TEST(binary_operation_f32) {
+  const uint64_t size = 727;
+  vecx_header header = {size, FLOAT_32, {}};
+  std::unique_ptr<float[]> data(new float[size]);
+  for (int i = 0; i < size; ++i) {
+    data[i] = 1.0 * i;
+  }
+  vecx vx = {header, data.get()};
 
-//   for (int i = 0; i < size; ++i) {
-//     data[i] = _cpu_quantize_i8(1.0, {1.0, -128});
-//   }
+  size_t dest_blob_size = header.bytes_count_total();
+  std::unique_ptr<int8_t[]> dest(new int8_t[dest_blob_size]);
 
-//   auto t1 = std::chrono::high_resolution_clock::now();
-//   vecx_header qheader = {size, QINT_8, {1.0, -128}};
-//   vecx qvx = {qheader, data.get()};
-//   ASSERT_CLOSE(f32_norm(&qvx), 23170.474609, _EPSILON)
+  vecx_status mstatus = vecx_mult(&vx, &vx, dest.get());
+  ASSERT_EQ(mstatus, VECX_OK)
 
-//   vecx_header header = {size, FLOAT_32, {0.0, 0}};
-//   size_t full_size = header.bytes_count_total();
-//   std::shared_ptr<uint8_t[]> blob(new uint8_t[full_size]);
-//   vecx_dequantize_to_f32(qvx, blob.get());
+  vecx out;
+  vecx_parse_blob(dest.get(), dest_blob_size, &out);
+  ASSERT_EQ(out.item_as<float>(4), 16.0)
+  ASSERT_EQ(out.item_as<float>(625), 390625)
 
-//   vecx vx;
-//   vecx_parse_blob(blob.get(), full_size, &vx);
+  LGTM
+}
 
-//   double ans = f32_dot_float_x_quant(&vx, &qvx);
+TEST(binary_operation_qi8) {
+  const uint64_t size = 727;
+  vecx_header qheader = {size, QINT_8, {}};
+  std::unique_ptr<int8_t[]> qdata(new int8_t[size]);
+  for (int i = 0; i < size; ++i) {
+    qdata[i] = _cpu_quantize_i8(1.0 * i, {2.847058823529412, -128});
+  }
+  vecx qvx = {qheader, qdata.get()};
 
-//   DEBUG_NUMBER(_, ans);
-//   DEBUG_NUMBER(_, sqrt(ans));
+  // qi8 x qi8
+  vecx_header dest_header = {size, FLOAT_32, {}};
+  size_t dest_blob_size = dest_header.bytes_count_total();
+  std::unique_ptr<int8_t[]> dest(new int8_t[dest_blob_size]);
+  vecx_status mstatus = vecx_mult(&qvx, &qvx, dest.get());
+  ASSERT_EQ(mstatus, VECX_OK)
 
-//   LGTM
-// }
+  // vecx out;
+  // vecx_parse_blob(dest.get(), dest_blob_size, &out);
+  // ASSERT_EQ(out.item_as<float>(4), 16.0)
+  // ASSERT_EQ(out.item_as<float>(625), 390625)
+
+  LGTM
+}
 
 TEST(eucl_norm_on_huge_quantized_i8) {
   // Tensors often are around 100mb, 200mb, 1Gb
@@ -126,16 +142,16 @@ TEST(eucl_norm_on_huge_quantized_i8) {
 
   // WARN: 4 * actual_size_mb more new allocations
   vecx_header header = {size, FLOAT_32, {0.0, 0}};
-  size_t full_size = header.bytes_count_total();
-  std::shared_ptr<uint8_t[]> blob(new uint8_t[full_size]);
+  size_t dest_blob_size = header.bytes_count_total();
+  std::unique_ptr<uint8_t[]> blob(new uint8_t[dest_blob_size]);
   vecx_dequantize_to_f32(qvx, blob.get());
 
   vecx vx;
-  vecx_parse_blob(blob.get(), full_size, &vx);
+  vecx_parse_blob(blob.get(), dest_blob_size, &vx);
 
-  ASSERT(vx.header.size == size)
-  ASSERT(vx.header.dtype == FLOAT_32)
-  ASSERT(vx.header.qparams.zero == 0)
+  ASSERT_EQ(vx.header.size, size)
+  ASSERT_EQ(vx.header.dtype, FLOAT_32)
+  ASSERT_EQ(vx.header.qparams.zero, 0)
 
   ASSERT_CLOSE(((float *)vx.data)[0], 1.0, _EPSILON)
   ASSERT_CLOSE(f32_norm(&vx), 23170.474609, _EPSILON)
