@@ -4,7 +4,6 @@
 #include <cstdint>
 #include <immintrin.h>
 
-
 // Note: float vector _mm256_add_ps(vsum, squared) overflows
 // Also this might double the used stack size if not handled correctly
 
@@ -96,7 +95,7 @@ vecx_status vecx_dequantize_to_f32(const vecx *v, void *dest) {
 
 // Reduction
 
-double f32_norm(const vecx *v) {
+double vecx_norm(const vecx *v) {
   double sum = 0.0f;
   switch (v->header.dtype) {
   case FLOAT_32: {

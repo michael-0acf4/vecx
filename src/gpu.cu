@@ -67,7 +67,7 @@ __global__ void euclidean_norm_kernel(const T *data, uint64_t size, quant_params
 }
 
 template <typename T>
-float f32_norm_host(const vecx *v)
+float norm_host(const vecx *v)
 {
     size_t type_size = vecx_type_size(v->header.dtype);
     T *d_data = nullptr;
@@ -93,10 +93,10 @@ float f32_norm_host(const vecx *v)
     return sqrtf(h_result);
 }
 
-double f32_norm(const vecx *v)
+double vecx_norm(const vecx *v)
 {
-    return v->header.dtype == FLOAT_32 ? f32_norm_host<float>(v)
-                                       : f32_norm_host<int8_t>(v);
+    return v->header.dtype == FLOAT_32 ? norm_host<float>(v)
+                                       : norm_host<int8_t>(v);
 }
 
 template <typename T, typename op_trivial>

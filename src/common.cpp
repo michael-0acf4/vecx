@@ -1,6 +1,6 @@
 #include "common.hpp"
 #include <cstdlib>
-#include <cstring>
+#include <sstream>
 
 uint64_t vecx_type_size(const vecx_dtype &dtype) {
   switch (dtype) {
@@ -101,4 +101,35 @@ void *vecx_pack_header_into(const vecx_header &header, void *dest) {
 void vecx_pack_into(const vecx &v_src, void *dest) {
   void *next = vecx_pack_header_into(v_src.header, dest);
   memcpy(next, v_src.data, v_src.header.bytes_count_data_region());
+}
+
+std::string vecx_show(const vecx &v) {
+  size_t window = 4;
+  size_t size = v.header.size;
+  std::ostringstream ss;
+  ss << (v.header.dtype == FLOAT_32 ? "F32" : "QI8");
+  ss << " [ ";
+
+  const auto display_item = [&](size_t pos) {
+    return v.header.dtype == FLOAT_32
+               ? v.item_as<float>(pos)
+               : _cpu_dequantize_i8(v.item_as<int8_t>(pos), v.header.qparams);
+  };
+
+  if (size <= 2 * window) {
+    for (size_t i = 0; i < size; ++i) {
+      ss << display_item(i) << " ";
+    }
+  } else {
+    for (size_t i = 0; i < window; ++i) {
+      ss << display_item(i) << " ";
+    }
+    ss << "... ";
+    for (size_t i = size - window; i < size; ++i) {
+      ss << display_item(i) << " ";
+    }
+  }
+
+  ss << "]";
+  return ss.str();
 }

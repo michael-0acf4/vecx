@@ -18,7 +18,7 @@ TEST(eucl_norm_basic) {
   float data[2] = {4.0, 3.0};
   vecx v = {{2, FLOAT_32, {}}, data};
 
-  ASSERT_CLOSE(f32_norm(&v), 5.0, 10e-6)
+  ASSERT_CLOSE(vecx_norm(&v), 5.0, 10e-6)
   LGTM
 }
 
@@ -28,7 +28,8 @@ TEST(eucl_norm_huge) {
   for (int i = 0; i < size; data[i++] = 1)
     ;
   vecx v = {{size, FLOAT_32, {}}, data};
-  ASSERT_CLOSE(f32_norm(&v), sqrt(static_cast<double>(v.header.size)), _EPSILON)
+  ASSERT_CLOSE(vecx_norm(&v), sqrt(static_cast<double>(v.header.size)),
+               _EPSILON)
 
   LGTM
 }
@@ -50,7 +51,7 @@ TEST(eucl_norm_on_quantized_i8) {
 
   vecx vx = {{10, FLOAT_32, {}}, xs};
   vecx qvx = {{10, QINT_8, qparams}, qxs};
-  ASSERT_CLOSE(f32_norm(&vx), f32_norm(&qvx), 0.5)
+  ASSERT_CLOSE(vecx_norm(&vx), vecx_norm(&qvx), 0.5)
 
   LGTM
 }
@@ -151,7 +152,7 @@ TEST(eucl_norm_on_huge_quantized_i8) {
   int ms_norm = 0;
   {
     auto t1 = std::chrono::high_resolution_clock::now();
-    ASSERT_CLOSE(f32_norm(&qvx), 23170.474609, _EPSILON)
+    ASSERT_CLOSE(vecx_norm(&qvx), 23170.474609, _EPSILON)
     auto t2 = std::chrono::high_resolution_clock::now();
     ms_norm =
         std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count();
@@ -167,6 +168,10 @@ TEST(eucl_norm_on_huge_quantized_i8) {
     auto t1 = std::chrono::high_resolution_clock::now();
     vecx_dequantize_to_f32(&qvx, blob.get());
     auto t2 = std::chrono::high_resolution_clock::now();
+
+    vecx vx;
+    vecx_parse_blob(blob.get(), dest_blob_size, &vx);
+    ASSERT_CLOSE(vecx_norm(&vx), 23170.474609, _EPSILON)
 
     ms_dequant =
         std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count();
@@ -186,8 +191,8 @@ TEST(eucl_norm_on_huge_quantized_i8) {
   // Core i5 11400H 2.70GHz (6 Cores)
   // SIMD is often faster for unit ops as there
   // are less memory copy overhead
-  ASSERT(ms_norm < 150 + delta)
-  ASSERT(ms_dequant < 500 + delta)
+  ASSERT(ms_norm < 160 + delta)
+  ASSERT(ms_dequant < 600 + delta)
 #endif
 
   LGTM

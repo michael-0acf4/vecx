@@ -26,26 +26,27 @@ for row in cur.execute("SELECT a, b FROM Test"):
         print(f" {col}: {x[:20]} ... {len(blob)} bytes, {len(x)} elements")
 
 
-for row in conn.execute("SELECT vecx_info()"):
+for row in conn.execute("SELECT x_info()"):
     print(f"INFO: {row}")
 
 print("Simple data check")
 for row in conn.execute(
     """
     SELECT 
-        vecx_size(vecx_dequantize(a)),
-        vecx_type(vecx_dequantize(a)),
-        vecx_norm(a),
-        vecx_size(vecx_dequantize(b)),
-        vecx_type(b),
-        vecx_norm(b),
-        vecx_norm(vecx_dequantize(b)),
-        vecx_norm(
-            vecx_sub(
-                vecx_add(a, a),
-                vecx_dequantize(a) --TODO: better error when non matching
+        x_size(x_dequantize(a)),
+        x_type(x_dequantize(a)),
+        x_show(a),
+        x_size(x_dequantize(b)),
+        x_show(b),
+        x_norm(b),
+        x_norm(x_dequantize(b)),
+        x_show(
+            x_div(
+                x_add(x_dequantize(a), x_mul(a, a)),
+                x_dequantize(x_dequantize(x_dequantize(a))) --TODO: better error when non matching
             )
-        )
+        ),
+        x_show(NULL)
     FROM Test
     """
 ):

@@ -4,7 +4,7 @@
 #include <cassert>
 #include <cmath>
 #include <cstdint>
-#include <iostream>
+#include <string>
 
 #define UNREACHABLE                                                            \
   do {                                                                         \
@@ -78,6 +78,8 @@ void *vecx_pack_header_into(const vecx_header &header, void *dest);
 // Pack vecx vector into dest
 // The caller must ensure that dest is of the correct size.
 void vecx_pack_into(const vecx &v_src, void *dest);
+
+std::string vecx_show(const vecx &v);
 
 // inline float _cpu_dequantize_i8(int8_t value, const quant_params &qparams);
 inline float _cpu_dequantize_i8(int8_t value, const quant_params &qparams) {
