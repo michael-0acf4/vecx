@@ -175,16 +175,19 @@ TEST(eucl_norm_on_huge_quantized_i8) {
   DEBUG_NUMBER(norm, ms_norm)
   DEBUG_NUMBER(dequant, ms_dequant)
 
+  const char *runs_ci = std::getenv("GITHUB_CI");
+  int delta = runs_ci ? 100 : 0;
+
 #ifdef ENABLE_CUDA_MODE
   // RTX 3070
-  ASSERT(ms_norm < 150)
-  ASSERT(ms_dequant < 700)
+  ASSERT(ms_norm < 150 + delta)
+  ASSERT(ms_dequant < 700 + delta)
 #else
   // Core i5 11400H 2.70GHz (6 Cores)
   // SIMD is often faster for unit ops as there
   // are less memory copy overhead
-  ASSERT(ms_norm < 150)
-  ASSERT(ms_dequant < 500)
+  ASSERT(ms_norm < 150 + delta)
+  ASSERT(ms_dequant < 500 + delta)
 #endif
 
   LGTM
