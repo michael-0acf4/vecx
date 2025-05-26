@@ -1,5 +1,6 @@
 #include "common.hpp"
 #include <cstdlib>
+#include <cstring>
 #include <sstream>
 
 uint64_t vecx_type_size(const vecx_dtype &dtype) {
@@ -51,13 +52,13 @@ vecx_status vecx_parse_blob(const void *blob, size_t blob_size,
 
   // quantization parameters
   quant_params qparams;
-  memcpy(&qparams, data + offset, sizeof(qparams));
+  std::memcpy(&qparams, data + offset, sizeof(qparams));
   out_vecx->header.qparams = qparams;
   offset += sizeof(qparams);
 
   // size
   uint64_t size;
-  memcpy(&size, data + offset, sizeof(size));
+  std::memcpy(&size, data + offset, sizeof(size));
   out_vecx->header.size = size;
   offset += sizeof(uint64_t);
 
@@ -82,17 +83,17 @@ void *vecx_pack_header_into(const vecx_header &header, void *dest) {
   uint8_t *data = (uint8_t *)dest;
   size_t offset = 0;
 
-  memcpy(data + offset, "vecx", 4);
+  std::memcpy(data + offset, "vecx", 4);
   offset += 4;
 
   uint8_t dtype = static_cast<uint8_t>(header.dtype);
-  memcpy(data + offset, &dtype, 1);
+  std::memcpy(data + offset, &dtype, 1);
   offset += 1;
 
-  memcpy(data + offset, &header.qparams, sizeof(header.qparams));
+  std::memcpy(data + offset, &header.qparams, sizeof(header.qparams));
   offset += sizeof(header.qparams);
 
-  memcpy(data + offset, &header.size, sizeof(header.size));
+  std::memcpy(data + offset, &header.size, sizeof(header.size));
   offset += sizeof(header.size);
 
   return data + offset;
@@ -100,7 +101,7 @@ void *vecx_pack_header_into(const vecx_header &header, void *dest) {
 
 void vecx_pack_into(const vecx &v_src, void *dest) {
   void *next = vecx_pack_header_into(v_src.header, dest);
-  memcpy(next, v_src.data, v_src.header.bytes_count_data_region());
+  std::memcpy(next, v_src.data, v_src.header.bytes_count_data_region());
 }
 
 std::string vecx_show(const vecx &v) {
