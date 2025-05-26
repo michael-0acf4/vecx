@@ -1,6 +1,7 @@
-#include "gpu.cuh"
+#include "backend.hpp"
+
+#include <cmath>
 #include <cuda_runtime.h>
-#include <math.h>
 
 template <typename T>
 __device__ inline float maybe_dequantize(T value, const quant_params &)
@@ -34,7 +35,7 @@ struct div_trivial
 };
 
 template <typename T>
-__global__ void device_euclidean_norm_kernel(const T *data, uint64_t size, quant_params qparams, float *result)
+__global__ void euclidean_norm_kernel(const T *data, uint64_t size, quant_params qparams, float *result)
 {
     extern __shared__ float partial_sum[];
 
@@ -80,7 +81,7 @@ float f32_norm_host(const vecx *v)
     int threads = 256;
     int blocks = (v->header.size + threads - 1) / threads;
     size_t shared_size = threads * type_size;
-    device_euclidean_norm_kernel<<<blocks, threads, shared_size>>>(d_data, v->header.size, v->header.qparams, d_result);
+    euclidean_norm_kernel<<<blocks, threads, shared_size>>>(d_data, v->header.size, v->header.qparams, d_result);
     cudaDeviceSynchronize();
 
     float h_result = 0;
@@ -92,7 +93,7 @@ float f32_norm_host(const vecx *v)
     return sqrtf(h_result);
 }
 
-float f32_norm(const vecx *v)
+double f32_norm(const vecx *v)
 {
     return v->header.dtype == FLOAT_32 ? f32_norm_host<float>(v)
                                        : f32_norm_host<int8_t>(v);
@@ -133,7 +134,7 @@ vecx_status op_apply_host(const vecx *a, const vecx *b, void *dest, op_trivial o
     quant_params qparams = a->header.qparams;
     float *d_result = nullptr;
     cudaMalloc(&d_result, size * sizeof(float));
-    cudaMemset(d_result, 69.0, size * sizeof(float));
+    cudaMemset(d_result, 0.0, size * sizeof(float));
 
     int threads = 256;
     int blocks = (a->header.size + threads - 1) / threads;
@@ -174,6 +175,52 @@ vecx_status vecx_div(const vecx *a, const vecx *b, void *dest)
 {
     return a->header.dtype == FLOAT_32 ? op_apply_host<float>(a, b, dest, div_trivial())
                                        : op_apply_host<int8_t>(a, b, dest, div_trivial());
+}
+
+__global__ void dequantize_i8_kernel(int8_t *a,
+                                     float *result,
+                                     size_t size,
+                                     quant_params qparams)
+{
+    size_t i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i < size)
+    {
+        result[i] = maybe_dequantize(a[i], qparams);
+    }
+}
+
+vecx_status vecx_dequantize_to_f32(const vecx *v, void *dest)
+{
+    if (v->header.dtype == FLOAT_32)
+    {
+        vecx_pack_into(*v, dest);
+        return VECX_OK;
+    }
+
+    int8_t *d_v_data = nullptr;
+    cudaMalloc(&d_v_data, v->header.bytes_count_data_region());
+    cudaMemcpy((void *)d_v_data, v->data, v->header.bytes_count_data_region(), cudaMemcpyHostToDevice);
+
+    size_t size = v->header.size;
+    quant_params qparams = v->header.qparams;
+    float *d_result = nullptr;
+    cudaMalloc(&d_result, size * sizeof(float));
+    cudaMemset(d_result, 0.0, size * sizeof(float));
+
+    int threads = 256;
+    int blocks = (v->header.size + threads - 1) / threads;
+    size_t type_size = vecx_type_size(v->header.dtype);
+    dequantize_i8_kernel<<<blocks, threads>>>(d_v_data, d_result, size, qparams);
+    cudaDeviceSynchronize();
+
+    vecx_header header = {size, FLOAT_32, {}};
+    float *h_result = (float *)vecx_pack_header_into(header, dest);
+    cudaMemcpy(h_result, d_result, size * sizeof(float), cudaMemcpyDeviceToHost);
+
+    cudaFree((void *)d_v_data);
+    cudaFree(d_result);
+
+    return VECX_OK;
 }
 
 // CUDA context init often skew test duration without this trick

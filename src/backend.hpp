@@ -1,6 +1,7 @@
 #pragma once
 #include "common.hpp"
 
+vecx_status vecx_dequantize_to_f32(const vecx *v, void *dest);
 double f32_norm(const vecx *v);
 
 vecx_status vecx_add(const vecx *a, const vecx *b, void *dest);

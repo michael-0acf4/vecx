@@ -1,16 +1,9 @@
 
-#include <memory>
-
 #include "sqlite3ext.h"
 SQLITE_EXTENSION_INIT1
 
-#include "common.hpp"
-
-#ifdef ENABLE_CUDA_MODE
-#include "gpu.cuh"
-#else
-#include "cpu.hpp"
-#endif
+#include "backend.hpp"
+#include <memory>
 
 void vecx_emit_error(sqlite3_context *ctx, vecx_status status) {
   switch (status) {
@@ -108,7 +101,7 @@ void vecx_dequantize(sqlite3_context *ctx, int argc, sqlite3_value **argv) {
   else {
     size_t size = vecx_header::canon_size() + qvec.header.size * sizeof(float);
     void *blob = sqlite3_malloc(size);
-    vecx_dequantize_to_f32(qvec, blob);
+    vecx_dequantize_to_f32(&qvec, blob);
 
     sqlite3_result_blob(ctx, blob, size, sqlite3_free);
   }
@@ -129,6 +122,74 @@ void vecx_norm(sqlite3_context *ctx, int argc, sqlite3_value **argv) {
     vecx_emit_error(ctx, status);
   else
     sqlite3_result_double(ctx, f32_norm(&vec));
+}
+
+enum OP { ADD, SUB, MUL, DIV };
+
+inline void vecx_apply_op(OP op, sqlite3_context *ctx, int argc,
+                          sqlite3_value **argv) {
+  if (argc != 2) {
+    sqlite3_result_null(ctx);
+    return;
+  }
+
+  const void *a_blob = sqlite3_value_blob(argv[0]);
+  const void *b_blob = sqlite3_value_blob(argv[1]);
+
+  uint64_t a_blob_size = sqlite3_value_bytes(argv[0]);
+  uint64_t b_blob_size = sqlite3_value_bytes(argv[1]);
+
+  vecx a, b;
+  vecx_status a_status = vecx_parse_blob(a_blob, a_blob_size, &a);
+  if (a_status < 0) {
+    vecx_emit_error(ctx, a_status);
+    return;
+  }
+
+  vecx_status b_status = vecx_parse_blob(a_blob, b_blob_size, &b);
+  if (b_status < 0) {
+    vecx_emit_error(ctx, b_status);
+    return;
+  }
+
+  size_t size = vecx_header::canon_size() + a.header.size * sizeof(float);
+  void *dest_blob = sqlite3_malloc(size);
+  switch (op) {
+  case ADD:
+    vecx_add(&a, &b, dest_blob);
+    break;
+  case SUB:
+    vecx_sub(&a, &b, dest_blob);
+    break;
+  case MUL:
+    vecx_mult(&a, &b, dest_blob);
+    break;
+  case DIV:
+    vecx_div(&a, &b, dest_blob);
+    sqlite3_result_blob(ctx, dest_blob, size, sqlite3_free);
+    break;
+  default:
+    vecx_emit_error(ctx, VECX_ERR_GENERIC);
+    return;
+  }
+
+  sqlite3_result_blob(ctx, dest_blob, size, sqlite3_free);
+}
+
+void vecx_run_add(sqlite3_context *ctx, int argc, sqlite3_value **argv) {
+  vecx_apply_op(ADD, ctx, argc, argv);
+}
+
+void vecx_run_sub(sqlite3_context *ctx, int argc, sqlite3_value **argv) {
+  vecx_apply_op(SUB, ctx, argc, argv);
+}
+
+void vecx_run_mult(sqlite3_context *ctx, int argc, sqlite3_value **argv) {
+  vecx_apply_op(MUL, ctx, argc, argv);
+}
+
+void vecx_run_div(sqlite3_context *ctx, int argc, sqlite3_value **argv) {
+  vecx_apply_op(DIV, ctx, argc, argv);
 }
 
 void vecx_info(sqlite3_context *ctx, int argc, sqlite3_value **argv) {
@@ -164,12 +225,22 @@ EXPORT int sqlite3_vecx_init(sqlite3 *db, char **pzErrMsg,
   sqlite3_create_function(db, "vecx_type", 1,
                           SQLITE_UTF8 | SQLITE_DETERMINISTIC, 0, vecx_type, 0,
                           0);
-  sqlite3_create_function(db, "vecx_norm", 1,
-                          SQLITE_UTF8 | SQLITE_DETERMINISTIC, 0, vecx_norm, 0,
-                          0);
-  sqlite3_create_function(db, "vecx_dequantize", 1,
-                          SQLITE_UTF8 | SQLITE_DETERMINISTIC, 0,
+  sqlite3_create_function(db, "vecx_norm", 1, SQLITE_DETERMINISTIC, 0,
+                          vecx_norm, 0, 0);
+  sqlite3_create_function(db, "vecx_dequantize", 1, SQLITE_DETERMINISTIC, 0,
                           vecx_dequantize, 0, 0);
+
+  sqlite3_create_function(db, "vecx_add", 2, SQLITE_DETERMINISTIC, 0,
+                          vecx_run_add, 0, 0);
+  sqlite3_create_function(db, "vecx_add", 2, SQLITE_DETERMINISTIC, 0,
+                          vecx_run_add, 0, 0);
+  sqlite3_create_function(db, "vecx_sub", 2, SQLITE_DETERMINISTIC, 0,
+                          vecx_run_add, 0, 0);
+  sqlite3_create_function(db, "vecx_mul", 2, SQLITE_DETERMINISTIC, 0,
+                          vecx_run_add, 0, 0);
+  sqlite3_create_function(db, "vecx_div", 2, SQLITE_DETERMINISTIC, 0,
+                          vecx_run_add, 0, 0);
+
   sqlite3_create_function(db, "vecx_info", 0,
                           SQLITE_UTF8 | SQLITE_DETERMINISTIC, 0, vecx_info, 0,
                           0);

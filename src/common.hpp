@@ -4,8 +4,6 @@
 #include <cassert>
 #include <cmath>
 #include <cstdint>
-#include <functional>
-#include <immintrin.h>
 #include <iostream>
 
 #define UNREACHABLE                                                            \
@@ -73,8 +71,6 @@ void *vecx_allocate_blob(const vecx_header &header);
 // function pointer but even then function signature may diverge (e.g.
 // sqlite3_malloc only accepts int as memory size)
 
-void vecx_dequantize_to_f32(const vecx &v, void *dest);
-
 // Pack vecx header and return the memory addresss coming after it.
 // The caller must ensure that dest is of the correct size.
 void *vecx_pack_header_into(const vecx_header &header, void *dest);
@@ -82,10 +78,6 @@ void *vecx_pack_header_into(const vecx_header &header, void *dest);
 // Pack vecx vector into dest
 // The caller must ensure that dest is of the correct size.
 void vecx_pack_into(const vecx &v_src, void *dest);
-
-// Dequantize a 256 block that packs 32 int8
-std::array<__m256, 4> _cpu_dequantize_fast(const __m256i &bytes_32xi8,
-                                           const quant_params &qparams);
 
 // inline float _cpu_dequantize_i8(int8_t value, const quant_params &qparams);
 inline float _cpu_dequantize_i8(int8_t value, const quant_params &qparams) {

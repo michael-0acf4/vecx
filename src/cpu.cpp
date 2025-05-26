@@ -1,10 +1,9 @@
-#include "cpu.hpp"
-#include "common.hpp"
+#include "backend.hpp"
+
 #include <cmath>
-#include <functional>
+#include <cstdint>
 #include <immintrin.h>
-#include <math.h>
-#include <stdint.h>
+
 
 // Note: float vector _mm256_add_ps(vsum, squared) overflows
 // Also this might double the used stack size if not handled correctly
@@ -27,6 +26,72 @@ inline __m256 _cpu_goback_2x4xf64_to_8xf32(const __m256d &lo_d_sum_4xf64,
   __m128 lo_sum_f = _mm256_cvtpd_ps(lo_d_sum_4xf64);
   __m128 hi_sum_f = _mm256_cvtpd_ps(hi_d_sum_4xf64);
   return _mm256_insertf128_ps(_mm256_castps128_ps256(lo_sum_f), hi_sum_f, 1);
+}
+
+// Dequantize a 256 block that packs 32 int8
+
+std::array<__m256, 4> _cpu_dequantize_fast(const __m256i &bytes_32xi8,
+                                           const quant_params &qparams) {
+  // Note: cast are 'logical' (just like static_cast)
+  //    [32 i8 -> 16 i8 + 16 i8]
+  // -> [32 i8 -> [ [16 i8 ~> [8 i32] + [8 i32]] ] + [...]]
+  // -> [32 i8 -> [ [16 i8 ~> [8 i32] + [8 i32]] ] + [...]]
+
+  __m128i low = _mm256_castsi256_si128(bytes_32xi8);
+  __m256i ext0 = _mm256_cvtepi8_epi32(low);
+  __m256i ext1 = _mm256_cvtepi8_epi32(_mm_bsrli_si128(low, 8));
+
+  __m128i high = _mm256_extracti128_si256(bytes_32xi8, 1);
+  __m256i ext2 = _mm256_cvtepi8_epi32(high);
+  __m256i ext3 = _mm256_cvtepi8_epi32(_mm_bsrli_si128(high, 8));
+
+  __m256 scale = _mm256_set1_ps(qparams.scale);
+  __m256i zp_vec = _mm256_set1_epi32(qparams.zero);
+
+  std::array<__m256, 4> out;
+  size_t i = 0;
+  for (const __m256i &packed_i32 : {ext0, ext1, ext2, ext3}) {
+    __m256i plus_zero = _mm256_sub_epi32(packed_i32, zp_vec);
+    __m256 plus_zero_f = _mm256_cvtepi32_ps(plus_zero);
+    __m256 scaled = _mm256_mul_ps(plus_zero_f, scale);
+
+    out[i++] = scaled;
+  }
+
+  return out;
+}
+
+vecx_status vecx_dequantize_to_f32(const vecx *v, void *dest) {
+  if (v->header.dtype == FLOAT_32) {
+    vecx_pack_into(*v, dest);
+    return VECX_OK;
+  }
+
+  const int8_t *data = static_cast<const int8_t *>(v->data);
+  size_t i = 0;
+  const size_t block = 256 / 8;
+
+  vecx_header header = {v->header.size, FLOAT_32, {}};
+  float_t *result = (float_t *)vecx_pack_header_into(header, dest);
+
+  size_t cursor = 0;
+  for (; i + block <= v->header.size; i += block) {
+    __m256i bytes_32xi8 =
+        _mm256_loadu_si256(reinterpret_cast<__m256i const *>(data + i));
+
+    for (const __m256 &ext_8xf32 :
+         _cpu_dequantize_fast(bytes_32xi8, v->header.qparams)) {
+      // Note: i increments 'block' amount
+      // extX => 8 floats
+      _mm256_storeu_ps(result + cursor * 8, ext_8xf32);
+      cursor++;
+    }
+  }
+
+  for (; i < v->header.size; i++)
+    result[i] = _cpu_dequantize_i8(data[i], v->header.qparams);
+
+  return VECX_OK;
 }
 
 // Reduction

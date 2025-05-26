@@ -1,13 +1,11 @@
 #include "test.hpp"
-#include "common.hpp"
+#include "backend.hpp"
 #include <cmath>
 #include <memory>
 
 #ifdef ENABLE_CUDA_MODE
-#include "gpu.cuh"
 static const char *device_name = "GPU (CUDA)";
 #else
-#include "cpu.hpp"
 static const char *device_name = "CPU";
 #endif
 
@@ -147,37 +145,46 @@ TEST(eucl_norm_on_huge_quantized_i8) {
     data[i] = _cpu_quantize_i8(1.0, {1.0, -128});
   }
 
-  auto t1 = std::chrono::high_resolution_clock::now();
   vecx_header qheader = {size, QINT_8, {1.0, -128}};
   vecx qvx = {qheader, data.get()};
-  ASSERT_CLOSE(f32_norm(&qvx), 23170.474609, _EPSILON)
 
-  // WARN: 4 * actual_size_mb more new allocations
-  vecx_header header = {size, FLOAT_32, {0.0, 0}};
-  size_t dest_blob_size = header.bytes_count_total();
-  std::unique_ptr<uint8_t[]> blob(new uint8_t[dest_blob_size]);
-  vecx_dequantize_to_f32(qvx, blob.get());
+  int ms_norm = 0;
+  {
+    auto t1 = std::chrono::high_resolution_clock::now();
+    ASSERT_CLOSE(f32_norm(&qvx), 23170.474609, _EPSILON)
+    auto t2 = std::chrono::high_resolution_clock::now();
+    ms_norm =
+        std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count();
+  }
 
-  vecx vx;
-  vecx_parse_blob(blob.get(), dest_blob_size, &vx);
+  int ms_dequant = 0;
+  {
+    // WARN: 4 * actual_size_mb more new allocations
+    vecx_header header = {size, FLOAT_32, {0.0, 0}};
+    size_t dest_blob_size = header.bytes_count_total();
+    std::unique_ptr<uint8_t[]> blob(new uint8_t[dest_blob_size]);
 
-  ASSERT_EQ(vx.header.size, size)
-  ASSERT_EQ(vx.header.dtype, FLOAT_32)
-  ASSERT_EQ(vx.header.qparams.zero, 0)
+    auto t1 = std::chrono::high_resolution_clock::now();
+    vecx_dequantize_to_f32(&qvx, blob.get());
+    auto t2 = std::chrono::high_resolution_clock::now();
 
-  ASSERT_CLOSE(((float *)vx.data)[0], 1.0, _EPSILON)
-  ASSERT_CLOSE(f32_norm(&vx), 23170.474609, _EPSILON)
-  auto t2 = std::chrono::high_resolution_clock::now();
+    ms_dequant =
+        std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count();
+  }
 
-  auto ms_int = std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1);
-  DEBUG_NUMBER(duration, ms_int.count())
+  DEBUG_NUMBER(norm, ms_norm)
+  DEBUG_NUMBER(dequant, ms_dequant)
 
 #ifdef ENABLE_CUDA_MODE
   // RTX 3070
-  ASSERT(ms_int.count() < 900)
+  ASSERT(ms_norm < 150)
+  ASSERT(ms_dequant < 700)
 #else
-  // SIMD is faster for reduce ops
-  ASSERT(ms_int.count() < 800)
+  // Core i5 11400H 2.70GHz (6 Cores)
+  // SIMD is often faster for unit ops as there
+  // are less memory copy overhead
+  ASSERT(ms_norm < 150)
+  ASSERT(ms_dequant < 500)
 #endif
 
   LGTM
