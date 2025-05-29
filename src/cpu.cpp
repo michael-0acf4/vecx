@@ -60,10 +60,10 @@ std::array<__m256, 4> _cpu_dequantize_fast(const __m256i &bytes_32xi8,
   return out;
 }
 
-vecx_status vecx_dequantize_to_f32(const vecx *v, void *dest) {
+vecx_result vecx_dequantize_to_f32(const vecx *v, void *dest) {
   if (v->header.dtype == FLOAT_32) {
     vecx_pack_into(*v, dest);
-    return VECX_OK;
+    return vecx_result::ok();
   }
 
   const int8_t *data = static_cast<const int8_t *>(v->data);
@@ -90,7 +90,7 @@ vecx_status vecx_dequantize_to_f32(const vecx *v, void *dest) {
   for (; i < v->header.size; i++)
     result[i] = _cpu_dequantize_i8(data[i], v->header.qparams);
 
-  return VECX_OK;
+  return vecx_result::ok();
 }
 
 // Reduction
@@ -161,9 +161,9 @@ double vecx_norm(const vecx *v) {
 
 // Binary Ops
 template <__m256 (*op_simd)(__m256, __m256), float (*op_trivial)(float, float)>
-inline vecx_status _cpu_op_apply(const vecx *a, const vecx *b, void *dest) {
-  vecx_status check = validate_layout_similarities(a, b);
-  if (check != VECX_OK) {
+inline vecx_result _cpu_op_apply(const vecx *a, const vecx *b, void *dest) {
+  vecx_result check = validate_layout_similarities(a, b);
+  if (check != vecx_result::ok()) {
     return check;
   }
 
@@ -227,7 +227,7 @@ inline vecx_status _cpu_op_apply(const vecx *a, const vecx *b, void *dest) {
     UNREACHABLE;
   }
 
-  return VECX_OK;
+  return vecx_result::ok();
 }
 
 // Note:
@@ -246,19 +246,19 @@ inline float mul_trivial(float a, float b) { return a * b; }
 inline __m256 div_simd(__m256 a, __m256 b) { return _mm256_div_ps(a, b); }
 inline float div_trivial(float a, float b) { return a / b; }
 
-vecx_status vecx_add(const vecx *a, const vecx *b, void *dest) {
+vecx_result vecx_add(const vecx *a, const vecx *b, void *dest) {
   return _cpu_op_apply<add_simd, add_trivial>(a, b, dest);
 }
 
-vecx_status vecx_sub(const vecx *a, const vecx *b, void *dest) {
+vecx_result vecx_sub(const vecx *a, const vecx *b, void *dest) {
   return _cpu_op_apply<sub_simd, sub_trivial>(a, b, dest);
 }
 
-vecx_status vecx_mult(const vecx *a, const vecx *b, void *dest) {
+vecx_result vecx_mult(const vecx *a, const vecx *b, void *dest) {
   return _cpu_op_apply<mul_simd, mul_trivial>(a, b, dest);
 }
 
-vecx_status vecx_div(const vecx *a, const vecx *b, void *dest) {
+vecx_result vecx_div(const vecx *a, const vecx *b, void *dest) {
   return _cpu_op_apply<div_simd, div_trivial>(a, b, dest);
 }
 

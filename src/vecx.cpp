@@ -5,39 +5,9 @@ SQLITE_EXTENSION_INIT1
 #include "backend.hpp"
 #include <memory>
 
-void x_emit_error(sqlite3_context *ctx, vecx_status status) {
-  switch (status) {
-  case VECX_ERR_BAD_VECX_HEADER:
-    sqlite3_result_error(ctx, "Underlying blob is not a vecx object", -1);
-    break;
-  case VECX_ERR_UNKNOWN_DTYPE:
-    sqlite3_result_error(ctx, "Underlying vecx object is of an unknown dtype",
-                         -1);
-    break;
-  case VECX_ERR_INVALID_LAYOUT:
-    sqlite3_result_error(ctx, "Underlying vecx object layout is not supported",
-                         -1);
-    break;
-  case VECX_ERR_INVALID_SIZE:
-    sqlite3_result_error(
-        ctx, "Underlying vecx object has an invalid reported size", -1);
-    break;
-  case VECX_ERR_BAD_OP_F32_X_QI8:
-    sqlite3_result_error(ctx, "Cannot directly operate F32 and QI8", -1);
-    break;
-  case VECX_ERR_BAD_OP_QI8_X_F32:
-    sqlite3_result_error(ctx, "Cannot directly operate QI8 and F32", -1);
-    break;
-  case VECX_ERR_BAD_OP_BAD_SIZE:
-    sqlite3_result_error(
-        ctx, "Cannot directly operate between two vectors of different size",
-        -1);
-    break;
-  case VECX_ERR_GENERIC:
-  default:
-    sqlite3_result_error(ctx, "Unknown error while processing vecx object", -1);
-    break;
-  }
+inline void x_emit_error(sqlite3_context *ctx, vecx_result res) {
+  sqlite3_result_error(ctx, res.error_payload.c_str(),
+                       res.error_payload.size());
 }
 
 void x_size(sqlite3_context *ctx, int argc, sqlite3_value **argv) {
@@ -54,12 +24,12 @@ void x_size(sqlite3_context *ctx, int argc, sqlite3_value **argv) {
   const void *blob = sqlite3_value_blob(argv[0]);
   uint64_t blob_size = sqlite3_value_bytes(argv[0]);
   vecx vec;
-  vecx_status status = vecx_parse_blob(blob, blob_size, &vec);
+  vecx_result status = vecx_parse_blob(blob, blob_size, &vec);
 
-  if (status < 0)
+  if (status.is_err())
     x_emit_error(ctx, status);
   else
-    sqlite3_result_int64(ctx, (int64_t)vec.header.size);
+    sqlite3_result_int64(ctx, vec.header.size);
 }
 
 void x_type(sqlite3_context *ctx, int argc, sqlite3_value **argv) {
@@ -76,9 +46,9 @@ void x_type(sqlite3_context *ctx, int argc, sqlite3_value **argv) {
   const void *blob = sqlite3_value_blob(argv[0]);
   uint64_t blob_size = sqlite3_value_bytes(argv[0]);
   vecx vec;
-  vecx_status status = vecx_parse_blob(blob, blob_size, &vec);
+  vecx_result status = vecx_parse_blob(blob, blob_size, &vec);
 
-  if (status < 0)
+  if (status.is_err())
     x_emit_error(ctx, status);
   else {
     switch (vec.header.dtype) {
@@ -89,7 +59,7 @@ void x_type(sqlite3_context *ctx, int argc, sqlite3_value **argv) {
       sqlite3_result_text(ctx, "QI8", -1, SQLITE_STATIC);
       break;
     default:
-      x_emit_error(ctx, VECX_ERR_UNKNOWN_DTYPE);
+      x_emit_error(ctx, vecx_result::unknown_dtype(vec.header.dtype));
       break;
     }
   }
@@ -109,12 +79,12 @@ void x_dequantize(sqlite3_context *ctx, int argc, sqlite3_value **argv) {
   const void *blob = sqlite3_value_blob(argv[0]);
   uint64_t blob_size = sqlite3_value_bytes(argv[0]);
   vecx qvec;
-  vecx_status status = vecx_parse_blob(blob, blob_size, &qvec);
+  vecx_result status = vecx_parse_blob(blob, blob_size, &qvec);
 
-  if (status < 0)
+  if (status.is_err())
     x_emit_error(ctx, status);
   else {
-    size_t size = vecx_header::canon_size() + qvec.header.size * sizeof(float);
+    size_t size = qvec.mem_size_required(FLOAT_32);
     void *blob = sqlite3_malloc(size);
     vecx_dequantize_to_f32(&qvec, blob);
 
@@ -136,9 +106,9 @@ void x_norm(sqlite3_context *ctx, int argc, sqlite3_value **argv) {
   const void *blob = sqlite3_value_blob(argv[0]);
   uint64_t blob_size = sqlite3_value_bytes(argv[0]);
   vecx vec;
-  vecx_status status = vecx_parse_blob(blob, blob_size, &vec);
+  vecx_result status = vecx_parse_blob(blob, blob_size, &vec);
 
-  if (status < 0)
+  if (status.is_err())
     x_emit_error(ctx, status);
   else
     sqlite3_result_double(ctx, vecx_norm(&vec));
@@ -166,19 +136,26 @@ inline void apply_op(OP op, sqlite3_context *ctx, int argc,
   uint64_t b_blob_size = sqlite3_value_bytes(argv[1]);
 
   vecx a, b;
-  vecx_status a_status = vecx_parse_blob(a_blob, a_blob_size, &a);
-  if (a_status < 0) {
-    x_emit_error(ctx, a_status);
+  vecx_result a_status = vecx_parse_blob(a_blob, a_blob_size, &a);
+  if (!a_status.is_ok()) {
+    sqlite3_result_error(ctx, a_status.error_payload.c_str(),
+                         a_status.error_payload.size());
     return;
   }
 
-  vecx_status b_status = vecx_parse_blob(a_blob, b_blob_size, &b);
-  if (b_status < 0) {
+  vecx_result b_status = vecx_parse_blob(b_blob, b_blob_size, &b);
+  if (b_status.is_err()) {
     x_emit_error(ctx, b_status);
     return;
   }
 
-  size_t size = vecx_header::canon_size() + a.header.size * sizeof(float);
+  vecx_result s_status = validate_layout_similarities(&a, &b);
+  if (s_status.is_err()) {
+    x_emit_error(ctx, s_status);
+    return;
+  }
+
+  size_t size = a.mem_size_required(FLOAT_32);
   void *dest_blob = sqlite3_malloc(size);
   switch (op) {
   case ADD:
@@ -194,7 +171,8 @@ inline void apply_op(OP op, sqlite3_context *ctx, int argc,
     vecx_div(&a, &b, dest_blob);
     break;
   default:
-    x_emit_error(ctx, VECX_ERR_GENERIC);
+    x_emit_error(ctx, vecx_result::error(VECX_ERR_GENERIC,
+                                         "Fatal: Unsupported operator given"));
     return;
   }
 
@@ -244,9 +222,9 @@ void x_show(sqlite3_context *ctx, int argc, sqlite3_value **argv) {
   const void *blob = sqlite3_value_blob(argv[0]);
   uint64_t blob_size = sqlite3_value_bytes(argv[0]);
   vecx vx;
-  vecx_status status = vecx_parse_blob(blob, blob_size, &vx);
+  vecx_result status = vecx_parse_blob(blob, blob_size, &vx);
 
-  if (status < 0)
+  if (status.is_err())
     sqlite3_result_text(ctx, "UNKNOWN VECX FORMAT", -1, SQLITE_STATIC);
   else {
     std::string info = vecx_show(vx);
@@ -268,10 +246,10 @@ EXPORT int sqlite3_vecx_init(sqlite3 *db, char **pzErrMsg,
 
   SQLITE_EXTENSION_INIT2(pApi);
 
-  sqlite3_create_function(db, "x_size", 1, SQLITE_UTF8 | SQLITE_DETERMINISTIC,
-                          0, x_size, 0, 0);
-  sqlite3_create_function(db, "x_type", 1, SQLITE_UTF8 | SQLITE_DETERMINISTIC,
-                          0, x_type, 0, 0);
+  sqlite3_create_function(db, "x_size", 1, SQLITE_DETERMINISTIC, 0, x_size, 0,
+                          0);
+  sqlite3_create_function(db, "x_type", 1, SQLITE_DETERMINISTIC, 0, x_type, 0,
+                          0);
   sqlite3_create_function(db, "x_show", 1, SQLITE_DETERMINISTIC, 0, x_show, 0,
                           0);
   sqlite3_create_function(db, "x_norm", 1, SQLITE_DETERMINISTIC, 0, x_norm, 0,

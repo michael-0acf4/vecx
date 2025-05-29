@@ -116,10 +116,10 @@ __global__ void op_apply_kernel(T *a, T *b,
 }
 
 template <typename T, typename op_trivial>
-vecx_status op_apply_host(const vecx *a, const vecx *b, void *dest, op_trivial op_apply)
+vecx_result op_apply_host(const vecx *a, const vecx *b, void *dest, op_trivial op_apply)
 {
-    vecx_status check = validate_layout_similarities(a, b);
-    if (check != VECX_OK)
+    vecx_result check = validate_layout_similarities(a, b);
+    if (check != vecx_result::ok())
         return check;
 
     T *d_a_data = nullptr;
@@ -150,28 +150,28 @@ vecx_status op_apply_host(const vecx *a, const vecx *b, void *dest, op_trivial o
     cudaFree((void *)d_b_data);
     cudaFree(d_result);
 
-    return VECX_OK;
+    return vecx_result::ok();
 }
 
-vecx_status vecx_add(const vecx *a, const vecx *b, void *dest)
+vecx_result vecx_add(const vecx *a, const vecx *b, void *dest)
 {
     return a->header.dtype == FLOAT_32 ? op_apply_host<float>(a, b, dest, add_trivial())
                                        : op_apply_host<int8_t>(a, b, dest, add_trivial());
 }
 
-vecx_status vecx_sub(const vecx *a, const vecx *b, void *dest)
+vecx_result vecx_sub(const vecx *a, const vecx *b, void *dest)
 {
     return a->header.dtype == FLOAT_32 ? op_apply_host<float>(a, b, dest, sub_trivial())
                                        : op_apply_host<int8_t>(a, b, dest, sub_trivial());
 }
 
-vecx_status vecx_mult(const vecx *a, const vecx *b, void *dest)
+vecx_result vecx_mult(const vecx *a, const vecx *b, void *dest)
 {
     return a->header.dtype == FLOAT_32 ? op_apply_host<float>(a, b, dest, mul_trivial())
                                        : op_apply_host<int8_t>(a, b, dest, mul_trivial());
 }
 
-vecx_status vecx_div(const vecx *a, const vecx *b, void *dest)
+vecx_result vecx_div(const vecx *a, const vecx *b, void *dest)
 {
     return a->header.dtype == FLOAT_32 ? op_apply_host<float>(a, b, dest, div_trivial())
                                        : op_apply_host<int8_t>(a, b, dest, div_trivial());
@@ -189,12 +189,12 @@ __global__ void dequantize_i8_kernel(int8_t *a,
     }
 }
 
-vecx_status vecx_dequantize_to_f32(const vecx *v, void *dest)
+vecx_result vecx_dequantize_to_f32(const vecx *v, void *dest)
 {
     if (v->header.dtype == FLOAT_32)
     {
         vecx_pack_into(*v, dest);
-        return VECX_OK;
+        return vecx_result::ok();
     }
 
     int8_t *d_v_data = nullptr;
@@ -220,7 +220,7 @@ vecx_status vecx_dequantize_to_f32(const vecx *v, void *dest)
     cudaFree((void *)d_v_data);
     cudaFree(d_result);
 
-    return VECX_OK;
+    return vecx_result::ok();
 }
 
 // CUDA context init often skew test duration without this trick

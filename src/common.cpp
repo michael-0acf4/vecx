@@ -14,6 +14,17 @@ uint64_t vecx_type_size(const vecx_dtype &dtype) {
   }
 }
 
+std::string vecx_type_name(const vecx_dtype &dtype) {
+  switch (dtype) {
+  case FLOAT_32:
+    return "F32";
+  case QINT_8:
+    return "QI8";
+  default:
+    return "UND";
+  }
+}
+
 /**
  * vecx Layout:
  *
@@ -23,30 +34,31 @@ uint64_t vecx_type_size(const vecx_dtype &dtype) {
  * * size (8 bytes)
  * * data pointer (size * canon size of vecx_dtype)
  */
-vecx_status vecx_parse_blob(const void *blob, size_t blob_size,
+vecx_result vecx_parse_blob(const void *blob, size_t blob_size,
                             vecx *out_vecx) {
   if (!blob)
-    return VECX_ERR_BAD_VECX_HEADER;
+    return vecx_result::bad_vecx_header("source blob is NULL");
 
   if (!out_vecx)
-    return VECX_ERR_GENERIC;
+    return vecx_result::error(VECX_ERR_GENERIC,
+                              "Fatal: source vecx not allocated");
 
   const int header_size = vecx_header::canon_size();
   if (blob_size < header_size)
-    return VECX_ERR_INVALID_LAYOUT;
+    return vecx_result::invalid_layout();
 
   const uint8_t *data = (const uint8_t *)blob;
   uint64_t offset = 0;
 
   // magic
   if (data[0] != 'v' || data[1] != 'e' || data[2] != 'c' || data[3] != 'x')
-    return VECX_ERR_BAD_VECX_HEADER;
+    return vecx_result::bad_vecx_header("vecx section malformed");
   offset += 4;
 
   // dtype
   vecx_dtype dtype = static_cast<vecx_dtype>(data[offset]);
   if (dtype != FLOAT_32 && dtype != QINT_8)
-    return VECX_ERR_UNKNOWN_DTYPE;
+    return vecx_result::unknown_dtype(dtype);
   out_vecx->header.dtype = dtype;
   offset += 1;
 
@@ -67,16 +79,12 @@ vecx_status vecx_parse_blob(const void *blob, size_t blob_size,
       vecx_type_size(static_cast<vecx_dtype>(out_vecx->header.dtype));
   uint64_t expected_total = header_size + size * type_size;
   if (blob_size != expected_total) {
-    // printf("%d =? %d + %d * %d = %d (%d)\n", blob_size, header_size, size,
-    //        type_size, expected_total, out_vecx->header.dtype);
-    // printf("scale %f zero %d", out_vecx->header.qparams.scale,
-    //        out_vecx->header.qparams.zero);
-    return VECX_ERR_INVALID_SIZE;
+    return vecx_result::invalid_size(blob_size);
   }
 
   out_vecx->data = data + offset;
 
-  return VECX_OK;
+  return vecx_result::ok();
 }
 
 void *vecx_pack_header_into(const vecx_header &header, void *dest) {
