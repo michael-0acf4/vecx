@@ -153,6 +153,50 @@ vecx_result op_apply_host(const vecx *a, const vecx *b, void *dest, op_trivial o
     return vecx_result::ok();
 }
 
+template <typename T, typename op_trivial>
+__global__ void op_apply_broadcast_scalar_kernel(T *v, float scalar,
+                                                 float *result,
+                                                 size_t size,
+                                                 quant_params qparams,
+                                                 op_trivial op_apply)
+{
+    size_t i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i < size)
+    {
+        float va = maybe_dequantize(v[i], qparams);
+        result[i] = op_apply(va, scalar);
+    }
+}
+
+template <typename T, typename op_trivial>
+vecx_result op_apply_broadcast_scalar_host(const vecx *v, float scalar, void *dest, op_trivial op_apply)
+{
+    T *d_v_data = nullptr;
+    cudaMalloc(&d_v_data, v->header.bytes_count_data_region());
+    cudaMemcpy((void *)d_v_data, v->data, v->header.bytes_count_data_region(), cudaMemcpyHostToDevice);
+
+    size_t size = v->header.size;
+    quant_params qparams = v->header.qparams;
+    float *d_result = nullptr;
+    cudaMalloc(&d_result, size * sizeof(float));
+    cudaMemset(d_result, 0.0, size * sizeof(float));
+
+    int threads = 256;
+    int blocks = (v->header.size + threads - 1) / threads;
+    size_t type_size = vecx_type_size(v->header.dtype);
+    op_apply_broadcast_scalar_kernel<<<blocks, threads>>>(d_v_data, scalar, d_result, size, qparams, op_apply);
+    cudaDeviceSynchronize();
+
+    vecx_header header = {size, FLOAT_32, {}};
+    float *h_result = (float *)vecx_pack_header_into(header, dest);
+    cudaMemcpy(h_result, d_result, size * sizeof(float), cudaMemcpyDeviceToHost);
+
+    cudaFree((void *)d_v_data);
+    cudaFree(d_result);
+
+    return vecx_result::ok();
+}
+
 vecx_result vecx_add(const vecx *a, const vecx *b, void *dest)
 {
     return a->header.dtype == FLOAT_32 ? op_apply_host<float>(a, b, dest, add_trivial())
@@ -175,6 +219,12 @@ vecx_result vecx_div(const vecx *a, const vecx *b, void *dest)
 {
     return a->header.dtype == FLOAT_32 ? op_apply_host<float>(a, b, dest, div_trivial())
                                        : op_apply_host<int8_t>(a, b, dest, div_trivial());
+}
+
+vecx_result vecx_scalar(const vecx *v, float scalar, void *dest)
+{
+    return v->header.dtype == FLOAT_32 ? op_apply_broadcast_scalar_host<float>(v, scalar, dest, mul_trivial())
+                                       : op_apply_broadcast_scalar_host<int8_t>(v, scalar, dest, mul_trivial());
 }
 
 __global__ void dequantize_i8_kernel(int8_t *a,

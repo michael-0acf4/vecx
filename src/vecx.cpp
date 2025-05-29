@@ -3,7 +3,6 @@
 SQLITE_EXTENSION_INIT1
 
 #include "backend.hpp"
-#include <memory>
 
 inline void x_emit_error(sqlite3_context *ctx, vecx_result res) {
   sqlite3_result_error(ctx, res.error_payload.c_str(),
@@ -129,13 +128,10 @@ inline void apply_op(OP op, sqlite3_context *ctx, int argc,
     return;
   }
 
-  const void *a_blob = sqlite3_value_blob(argv[0]);
-  const void *b_blob = sqlite3_value_blob(argv[1]);
-
-  uint64_t a_blob_size = sqlite3_value_bytes(argv[0]);
-  uint64_t b_blob_size = sqlite3_value_bytes(argv[1]);
-
   vecx a, b;
+
+  const void *a_blob = sqlite3_value_blob(argv[0]);
+  uint64_t a_blob_size = sqlite3_value_bytes(argv[0]);
   vecx_result a_status = vecx_parse_blob(a_blob, a_blob_size, &a);
   if (!a_status.is_ok()) {
     sqlite3_result_error(ctx, a_status.error_payload.c_str(),
@@ -143,6 +139,8 @@ inline void apply_op(OP op, sqlite3_context *ctx, int argc,
     return;
   }
 
+  const void *b_blob = sqlite3_value_blob(argv[1]);
+  uint64_t b_blob_size = sqlite3_value_bytes(argv[1]);
   vecx_result b_status = vecx_parse_blob(b_blob, b_blob_size, &b);
   if (b_status.is_err()) {
     x_emit_error(ctx, b_status);
@@ -193,6 +191,35 @@ void x_mul(sqlite3_context *ctx, int argc, sqlite3_value **argv) {
 
 void x_div(sqlite3_context *ctx, int argc, sqlite3_value **argv) {
   apply_op(DIV, ctx, argc, argv);
+}
+
+void x_mulk(sqlite3_context *ctx, int argc, sqlite3_value **argv) {
+  if (argc != 2) {
+    sqlite3_result_null(ctx);
+    return;
+  }
+
+  if (sqlite3_value_type(argv[0]) != SQLITE_BLOB ||
+      sqlite3_value_type(argv[1]) != SQLITE_FLOAT) {
+    sqlite3_result_null(ctx);
+    return;
+  }
+
+  const void *blob = sqlite3_value_blob(argv[0]);
+  uint64_t blob_size = sqlite3_value_bytes(argv[0]);
+  vecx qvec;
+  vecx_result status = vecx_parse_blob(blob, blob_size, &qvec);
+
+  if (status.is_err())
+    x_emit_error(ctx, status);
+  else {
+    const float scalar = sqlite3_value_double(argv[1]);
+    size_t size = qvec.mem_size_required(FLOAT_32);
+    void *blob = sqlite3_malloc(size);
+    vecx_scalar(&qvec, scalar, blob);
+
+    sqlite3_result_blob(ctx, blob, size, sqlite3_free);
+  }
 }
 
 void x_info(sqlite3_context *ctx, int argc, sqlite3_value **argv) {
@@ -260,6 +287,8 @@ EXPORT int sqlite3_vecx_init(sqlite3 *db, char **pzErrMsg,
   sqlite3_create_function(db, "x_add", 2, SQLITE_DETERMINISTIC, 0, x_add, 0, 0);
   sqlite3_create_function(db, "x_sub", 2, SQLITE_DETERMINISTIC, 0, x_sub, 0, 0);
   sqlite3_create_function(db, "x_mul", 2, SQLITE_DETERMINISTIC, 0, x_mul, 0, 0);
+  sqlite3_create_function(db, "x_mulk", 2, SQLITE_DETERMINISTIC, 0, x_mulk, 0,
+                          0);
   sqlite3_create_function(db, "x_div", 2, SQLITE_DETERMINISTIC, 0, x_div, 0, 0);
 
   sqlite3_create_function(db, "x_info", 0, SQLITE_UTF8 | SQLITE_DETERMINISTIC,

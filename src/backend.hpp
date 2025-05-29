@@ -9,4 +9,11 @@ vecx_result vecx_sub(const vecx *a, const vecx *b, void *dest);
 vecx_result vecx_mult(const vecx *a, const vecx *b, void *dest);
 vecx_result vecx_div(const vecx *a, const vecx *b, void *dest);
 
+// TODO:
+// Scalar broadcasting looks easily generalizable with compile time
+// expanded code..
+// Maybe extend beyond mult?
+
+vecx_result vecx_scalar(const vecx *v, float scalar, void *dest);
+
 void init_device();

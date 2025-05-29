@@ -100,6 +100,29 @@ TEST(binary_operation_f32) {
   LGTM
 }
 
+TEST(binary_operation_scalar_mult) {
+  const uint64_t size = 727;
+  vecx_header header = {size, FLOAT_32, {}};
+  std::unique_ptr<float[]> data(new float[size]);
+  for (int i = 0; i < size; ++i) {
+    data[i] = 1.0 * i;
+  }
+  vecx vx = {header, data.get()};
+
+  size_t dest_blob_size = header.bytes_count_total();
+  std::unique_ptr<int8_t[]> dest(new int8_t[dest_blob_size]);
+
+  vecx_status mstatus = vecx_scalar(&vx, 42.0, dest.get());
+  ASSERT_EQ(mstatus, VECX_OK)
+
+  vecx out;
+  vecx_parse_blob(dest.get(), dest_blob_size, &out);
+  ASSERT_EQ(out.item_as<float>(1), 42.0)
+  ASSERT_EQ(out.item_as<float>(4), 168.0)
+
+  LGTM
+}
+
 TEST(binary_operation_qi8) {
   const uint64_t size = 727;
   vecx_header qheader = {size, QINT_8, {2.847058823529412, -128}};

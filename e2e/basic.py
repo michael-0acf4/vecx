@@ -43,7 +43,11 @@ for row in conn.execute(
         x_show(
             x_div(
                 x_add(x_dequantize(a), x_mul(a, a)),
-                x_dequantize(x_dequantize(x_dequantize(a))) --TODO: better error when non matching
+                x_mulk(
+                    -- x_dequantize(x_dequantize(x_dequantize(a))), --TODO: better error when non matching
+                    a,
+                    2.0
+                )
             )
         ),
         x_show(NULL)

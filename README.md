@@ -31,8 +31,7 @@ make build USE_CUDA=1
   - [x] Substract
   - [x] Multiply
   - [x] Division
-  - [ ] Scalar multiplication (left, right)
-- [ ] Dot product
+  - [x] Scalar multiplication
+  - [ ] Dot product
 - [ ] Inline vector definition: `vecx_inline('-4, 9, 0.00, 4.6', 'f32')`
 - [ ] Type conversion
-- [ ] Vector folding `vecx_fold('+' | '-' | '/' | '*', blob, init)`

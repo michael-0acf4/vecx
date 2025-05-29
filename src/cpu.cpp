@@ -163,7 +163,7 @@ double vecx_norm(const vecx *v) {
 template <__m256 (*op_simd)(__m256, __m256), float (*op_trivial)(float, float)>
 inline vecx_result _cpu_op_apply(const vecx *a, const vecx *b, void *dest) {
   vecx_result check = validate_layout_similarities(a, b);
-  if (check != vecx_result::ok()) {
+  if (check.is_err()) {
     return check;
   }
 
@@ -260,6 +260,70 @@ vecx_result vecx_mult(const vecx *a, const vecx *b, void *dest) {
 
 vecx_result vecx_div(const vecx *a, const vecx *b, void *dest) {
   return _cpu_op_apply<div_simd, div_trivial>(a, b, dest);
+}
+
+template <__m256 (*op_simd)(__m256, __m256), float (*op_trivial)(float, float)>
+inline vecx_result _cpu_op_apply_broadcast_scalar(const vecx *v, float scalar,
+                                                  void *dest) {
+  const vecx_dtype dtype = v->header.dtype;
+  const size_t size = v->header.size;
+
+  vecx_header header = {size, FLOAT_32, {}};
+  float *result = (float *)vecx_pack_header_into(header, dest);
+
+  switch (dtype) {
+  case FLOAT_32: {
+    const float *v_data = v->data_as<float>();
+    uint64_t i = 0;
+    const size_t block = 256 / 32;
+
+    __m256 brdcst_8xf32 = _mm256_set1_ps(scalar);
+    for (; i + block <= size; i += block) {
+      __m256 value = _mm256_loadu_ps(v_data + i);
+      __m256 op_res = op_simd(value, brdcst_8xf32);
+      _mm256_storeu_ps(result + i, op_res);
+    }
+
+    for (; i < size; ++i)
+      result[i] = op_trivial(v_data[i], scalar);
+    break;
+  }
+  case QINT_8: {
+    const int8_t *v_data = v->data_as<int8_t>();
+    size_t i = 0;
+    const size_t block = 256 / 8;
+
+    size_t cursor = 0;
+    __m256 brdcst_8xf32 = _mm256_set1_ps(scalar);
+    for (; i + block <= size; i += block) {
+      __m256i bytes_32xi8 =
+          _mm256_loadu_si256(reinterpret_cast<__m256i const *>(v_data + i));
+
+      std::array<__m256, 4> chunks =
+          _cpu_dequantize_fast(bytes_32xi8, v->header.qparams);
+
+      for (int j = 0; j < 4; ++j, cursor += 8 /*floats*/) {
+        __m256 op_res = op_simd(chunks[j], brdcst_8xf32);
+        _mm256_storeu_ps(result + cursor, op_res);
+      }
+    }
+
+    size_t k = cursor;
+    for (; k < size; ++k) {
+      result[k] =
+          op_trivial(_cpu_dequantize_i8(v_data[k], v->header.qparams), scalar);
+    }
+    break;
+  }
+  default:
+    UNREACHABLE;
+  }
+
+  return vecx_result::ok();
+}
+
+vecx_result vecx_scalar(const vecx *v, float scalar, void *dest) {
+  return _cpu_op_apply_broadcast_scalar<mul_simd, mul_trivial>(v, scalar, dest);
 }
 
 void init_device() {}
