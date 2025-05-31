@@ -4,6 +4,7 @@
 #include <cassert>
 #include <cmath>
 #include <cstdint>
+#include <iostream>
 #include <string>
 
 #define UNREACHABLE                                                            \
@@ -65,6 +66,8 @@ typedef struct vecx_result {
 
   static inline vecx_result error(vecx_status status,
                                   const std::string &&message) {
+    // TODO: add debug flag
+    // std::cerr << "[ERROR] " << message << "\n";
     return {status, message};
   }
 
