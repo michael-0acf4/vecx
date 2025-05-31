@@ -40,9 +40,9 @@ typedef struct vecx_header {
   vecx_dtype dtype;
   quant_params qparams;
 
-  inline size_t bytes_count_data_region() const {
-    return vecx_type_size(dtype) * size;
-  }
+  inline size_t bytes_count_data_region() const { return type_size() * size; }
+
+  inline size_t type_size() const { return vecx_type_size(dtype); }
 
   inline size_t bytes_count_total() const {
     return vecx_header::canon_size() + bytes_count_data_region();

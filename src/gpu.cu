@@ -2,6 +2,103 @@
 
 #include <cmath>
 #include <cuda_runtime.h>
+#include <iostream>
+
+// WARNING: only use when expr owns all its ressources (destroyed when out of scope)
+#define UNSAFE_MAYBE_ABORT(expr)                         \
+    {                                                    \
+        vecx_result res = (expr);                        \
+        if (res.is_err())                                \
+        {                                                \
+            /* std::cout << res.error_payload << "\n";*/ \
+            return res;                                  \
+        }                                                \
+    }
+
+// RAII style custom unique pointer
+// This enables safe early returns with device allocated memory
+
+template <typename T>
+class cuda_ptr
+{
+public:
+    T *device_data = nullptr;
+    size_t device_size = 0;
+
+    ~cuda_ptr()
+    {
+        cudaError_t err = cudaFree((void *)device_data);
+        // std::cout << "Freed " << cudaGetErrorString(err) << ", size" << device_size << "\n";
+        device_data = nullptr;
+        device_size = 0;
+    }
+
+    vecx_result device_memset(T value, size_t size) const
+    {
+        if (device_size < size)
+            return vecx_result::device_error("device_memset: size is too large during");
+
+        if (device_data == nullptr)
+            return vecx_result::device_error("device_memset: device data not initialized yet during");
+
+        cudaError_t err = cudaMemset((void *)device_data, value, device_size);
+        if (err != cudaSuccess)
+            return vecx_result::device_error("device_memset: " + std::string(cudaGetErrorString(err)));
+
+        return vecx_result::ok();
+    }
+
+    vecx_result device_memset(T value) const
+    {
+        return device_memset(value, 1);
+    }
+
+    vecx_result device_alloc(size_t size)
+    {
+        if (device_size != 0 || device_data != nullptr)
+            return vecx_result::device_error("device buffer already allocated");
+
+        if (size <= 0)
+            return vecx_result::device_error("host size cannot be less than or equal to 0");
+
+        device_size = size;
+        cudaError_t err = cudaSuccess;
+
+        err = cudaMalloc(&device_data, size);
+        if (err != cudaSuccess)
+            return vecx_result::device_error("device_alloc: " + std::string(cudaGetErrorString(err)));
+
+        return vecx_result::ok();
+    }
+
+    vecx_result hostvecx2device(const vecx *v)
+    {
+        T *data = (T *)v->data_as<T>();
+        return host2device(data, v->header.bytes_count_data_region());
+    }
+
+    vecx_result host2device(T *host_data, size_t host_size)
+    {
+        vecx_result res = device_alloc(host_size);
+        if (res.is_err())
+            return res;
+
+        cudaError_t err = cudaMemcpy((void *)device_data, (void *)host_data, host_size, cudaMemcpyHostToDevice);
+        if (err != cudaSuccess)
+            return vecx_result::device_error("host2device: " + std::string(cudaGetErrorString(err)));
+
+        return vecx_result::ok();
+    }
+
+    vecx_result device2host(T *host_receiver, size_t host_rc_size) const
+    {
+        cudaError_t err = cudaMemcpy((void *)host_receiver, (void *)device_data, device_size, cudaMemcpyDeviceToHost);
+        if (err != cudaSuccess)
+            return vecx_result::device_error("device2host: " + std::string(cudaGetErrorString(err)));
+
+        return vecx_result::ok();
+    }
+};
 
 template <typename T>
 __device__ inline float maybe_dequantize(T value, const quant_params &)
@@ -69,26 +166,23 @@ __global__ void euclidean_norm_kernel(const T *data, uint64_t size, quant_params
 template <typename T>
 float norm_host(const vecx *v)
 {
-    size_t type_size = vecx_type_size(v->header.dtype);
-    T *d_data = nullptr;
-    cudaMalloc(&d_data, v->header.bytes_count_data_region());
-    cudaMemcpy((void *)d_data, v->data, v->header.bytes_count_data_region(), cudaMemcpyHostToDevice);
 
-    float *d_result = nullptr;
-    cudaMalloc(&d_result, sizeof(float));
-    cudaMemset(d_result, 0, sizeof(float));
+    cuda_ptr<T> d_data;
+    UNSAFE_MAYBE_ABORT(d_data.hostvecx2device(v));
 
+    cuda_ptr<float> d_result;
+    UNSAFE_MAYBE_ABORT(d_result.device_alloc(sizeof(float)));
+    UNSAFE_MAYBE_ABORT(d_result.device_memset(0));
+
+    size_t type_size = v->header.type_size();
     int threads = 256;
     int blocks = (v->header.size + threads - 1) / threads;
     size_t shared_size = threads * type_size;
-    euclidean_norm_kernel<<<blocks, threads, shared_size>>>(d_data, v->header.size, v->header.qparams, d_result);
+    euclidean_norm_kernel<<<blocks, threads, shared_size>>>(d_data.device_data, v->header.size, v->header.qparams, d_result.device_data);
     cudaDeviceSynchronize();
 
     float h_result = 0;
-    cudaMemcpy(&h_result, d_result, sizeof(h_result), cudaMemcpyDeviceToHost);
-
-    cudaFree((void *)d_data);
-    cudaFree(d_result);
+    UNSAFE_MAYBE_ABORT(d_result.device2host(&h_result, sizeof(float)));
 
     cudaError_t err = cudaGetLastError();
     if (err != cudaSuccess)
