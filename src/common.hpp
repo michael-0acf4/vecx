@@ -26,6 +26,7 @@ typedef enum vecx_status {
   VECX_ERR_BAD_OPERAND = -6,
   VECX_ERR_BAD_OP_BAD_SIZE = -7,
   VECX_ERR_BAD_OP_BAD_DTYPE = -8,
+  VECX_ERR_DEVICE_PROBLEM = -9,
   VECX_ERR_GENERIC = -1000,
 } vecx_status;
 
@@ -107,6 +108,15 @@ typedef struct vecx_result {
                  "Incompatible operand type: " + vecx_type_name(ltype) +
                      " vs " + vecx_type_name(rtype));
   }
+
+  static inline vecx_result device_error(const std::string &message) {
+    return error(VECX_ERR_DEVICE_PROBLEM, "Device error " + message);
+  }
+
+  static inline vecx_result device_error(const char *message) {
+    return error(VECX_ERR_DEVICE_PROBLEM,
+                 "Device error " + std::string(message));
+  }
 } result;
 
 typedef struct vecx {
@@ -151,7 +161,6 @@ inline float _cpu_dequantize_i8(int8_t value, const quant_params &qparams) {
          static_cast<float>(static_cast<int32_t>(value) - qparams.zero);
 }
 
-inline int8_t _cpu_quantize_i8(float value, const quant_params &qparams);
 inline int8_t _cpu_quantize_i8(float value, const quant_params &qparams) {
   return static_cast<int8_t>(std::fmax(
       std::fmin(INT8_MAX, std::round(value / qparams.scale + qparams.zero)),

@@ -90,6 +90,12 @@ float norm_host(const vecx *v)
     cudaFree((void *)d_data);
     cudaFree(d_result);
 
+    cudaError_t err = cudaGetLastError();
+    if (err != cudaSuccess)
+    {
+        return vecx_result::device_error(cudaGetErrorString(err));
+    }
+
     return sqrtf(h_result);
 }
 
@@ -150,6 +156,12 @@ vecx_result op_apply_host(const vecx *a, const vecx *b, void *dest, op_trivial o
     cudaFree((void *)d_b_data);
     cudaFree(d_result);
 
+    cudaError_t err = cudaGetLastError();
+    if (err != cudaSuccess)
+    {
+        return vecx_result::device_error(cudaGetErrorString(err));
+    }
+
     return vecx_result::ok();
 }
 
@@ -193,6 +205,12 @@ vecx_result op_apply_broadcast_scalar_host(const vecx *v, float scalar, void *de
 
     cudaFree((void *)d_v_data);
     cudaFree(d_result);
+
+    cudaError_t err = cudaGetLastError();
+    if (err != cudaSuccess)
+    {
+        return vecx_result::device_error(cudaGetErrorString(err));
+    }
 
     return vecx_result::ok();
 }
@@ -269,6 +287,12 @@ vecx_result vecx_dequantize_to_f32(const vecx *v, void *dest)
 
     cudaFree((void *)d_v_data);
     cudaFree(d_result);
+
+    cudaError_t err = cudaGetLastError();
+    if (err != cudaSuccess)
+    {
+        return vecx_result::device_error(cudaGetErrorString(err));
+    }
 
     return vecx_result::ok();
 }
