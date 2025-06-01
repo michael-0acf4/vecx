@@ -33,7 +33,7 @@ make build USE_CUDA=1
   - [x] Division `x_div(a, b)`
   - [x] Scalar multiplication `x_mulk(a, b)`
   - [x] Dot product `x_dot(a, b)`
-  - [ ] Cosine similarity `x_cosim(a, b)`
+  - [x] Cosine similarity `x_cosim(a, b)`
 - [x] Dequantize from qi8 to f32 `x_dequantize(a)`
 - [ ] Inline vector definition:
   - `x_vec('1.0, 2.0, 3.0, 4')`

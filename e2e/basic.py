@@ -39,6 +39,7 @@ res = conn.execute(
         x_norm(b),
         x_norm(x_dequantize(b)),
         (sqrt(x_dot(x_dequantize(b), b)) + 375.0),
+        x_cosim(a, a),
         x_show(
             x_div(
                 x_add(x_dequantize(a), x_mul(a, a)),

@@ -242,6 +242,19 @@ double vecx_norm(const vecx *v)
     return sqrtf(sum);
 }
 
+vecx_result vecx_cosim(const vecx *a, const vecx *b, double *result)
+{
+    double na = vecx_norm(a);
+    double nb = vecx_norm(b);
+    double dot = 0.0;
+    vecx_result res = vecx_dot(a, b, &dot);
+    if (res.is_err())
+        return res;
+
+    *result = dot / (na * nb);
+    return vecx_result::ok();
+}
+
 template <typename T, typename op_trivial>
 __global__ void op_apply_kernel(T *a, T *b,
                                 float *result,

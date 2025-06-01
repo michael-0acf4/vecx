@@ -134,7 +134,7 @@ inline void apply_op(OP op, sqlite3_context *ctx, int argc,
   size_t size = a.mem_size_required(FLOAT_32);
   void *dest_blob = sqlite3_malloc(size);
 
-  vecx_result res;
+  vecx_result res = vecx_result::ok();
   switch (op) {
   case ADD:
     res = vecx_add(&a, &b, dest_blob);
@@ -163,7 +163,10 @@ inline void apply_op(OP op, sqlite3_context *ctx, int argc,
   sqlite3_result_blob(ctx, dest_blob, size, sqlite3_free);
 }
 
-void x_dot(sqlite3_context *ctx, int argc, sqlite3_value **argv) {
+enum REDUX_OP { DOT, COS_SIM };
+
+void apply_redux_op(REDUX_OP op, sqlite3_context *ctx, int argc,
+                    sqlite3_value **argv) {
   if (argc != 2) {
     sqlite3_result_null(ctx);
     return;
@@ -200,14 +203,35 @@ void x_dot(sqlite3_context *ctx, int argc, sqlite3_value **argv) {
     return;
   }
 
+  vecx_result res = vecx_result::ok();
   double result = 0.0;
-  vecx_result res = vecx_dot(&a, &b, &result);
+  switch (op) {
+  case DOT:
+    res = vecx_dot(&a, &b, &result);
+    break;
+  case COS_SIM:
+    res = vecx_cosim(&a, &b, &result);
+    break;
+  default:
+    x_emit_error(ctx, vecx_result::error(VECX_ERR_GENERIC,
+                                         "Fatal: Unsupported operator given"));
+    return;
+  }
+
   if (res.is_err()) {
     x_emit_error(ctx, res);
     return;
   }
 
   sqlite3_result_double(ctx, result);
+}
+
+void x_dot(sqlite3_context *ctx, int argc, sqlite3_value **argv) {
+  apply_redux_op(DOT, ctx, argc, argv);
+}
+
+void x_cosim(sqlite3_context *ctx, int argc, sqlite3_value **argv) {
+  apply_redux_op(COS_SIM, ctx, argc, argv);
 }
 
 void x_norm(sqlite3_context *ctx, int argc, sqlite3_value **argv) {
@@ -346,6 +370,8 @@ EXPORT int sqlite3_vecx_init(sqlite3 *db, char **pzErrMsg,
                           0);
   sqlite3_create_function(db, "x_div", 2, SQLITE_DETERMINISTIC, 0, x_div, 0, 0);
   sqlite3_create_function(db, "x_dot", 2, SQLITE_DETERMINISTIC, 0, x_dot, 0, 0);
+  sqlite3_create_function(db, "x_cosim", 2, SQLITE_DETERMINISTIC, 0, x_cosim, 0,
+                          0);
   sqlite3_create_function(db, "x_info", 0, SQLITE_UTF8 | SQLITE_DETERMINISTIC,
                           0, x_info, 0, 0);
 

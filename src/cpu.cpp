@@ -177,11 +177,23 @@ vecx_result vecx_dot(const vecx *a, const vecx *b, double *sum) {
 }
 
 double vecx_norm(const vecx *v) {
-  double sum = 0.0;
-  vecx_result _res = vecx_dot(v, v, &sum);
+  double dot = 0.0;
+  vecx_result _res = vecx_dot(v, v, &dot);
 
-  // assert(sum > 0)
-  return sqrtf(sum);
+  // assert(dot > 0)
+  return sqrtf(dot);
+}
+
+vecx_result vecx_cosim(const vecx *a, const vecx *b, double *result) {
+  double na = vecx_norm(a);
+  double nb = vecx_norm(b);
+  double dot = 0.0;
+  vecx_result res = vecx_dot(a, b, &dot);
+  if (res.is_err())
+    return res;
+
+  *result = dot / (na * nb);
+  return vecx_result::ok();
 }
 
 // Binary Ops
