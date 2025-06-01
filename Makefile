@@ -35,3 +35,6 @@ test:
 
 python: build
 	python e2e/basic.py
+
+use_case: build
+	python e2e/use_case.py

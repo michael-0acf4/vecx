@@ -251,7 +251,7 @@ vecx_result vecx_cosim(const vecx *a, const vecx *b, double *result)
     if (res.is_err())
         return res;
 
-    *result = dot / (na * nb);
+    *result = std::fmin(1.0, std::fmax(-1.0, dot / (na * nb)));
     return vecx_result::ok();
 }
 

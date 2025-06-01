@@ -36,6 +36,12 @@ make build USE_CUDA=1
   - `x_vec('1.0, 2.0, 3.0, 4')`
   - `x_vec('-4, 9, 0.00, 4.6', left_pad, right_pad, fill_val)`
 
+# Use-case demo
+
+Here is a simple similarity ranking ([e2e/use_case.py](e2e/use_case.py))
+
+![example](e2e/example.png)
+
 # Binary specification
 
 A simple plain binary that contains the size, quantization parameters and the
