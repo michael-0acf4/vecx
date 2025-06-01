@@ -98,7 +98,7 @@ int run_all_tests() {
     }
 
     const auto status = (err.empty() ? green("OK") : red("FAIL"));
-    std::cout << "[TEST" << std::setw(2) << (number++) << "] " << test.first
+    std::cout << "[TEST" << std::setw(3) << (number++) << "] " << test.first
               << ": " << status << " (" << ms_int.count() << " ms)\n"
               << err;
   }

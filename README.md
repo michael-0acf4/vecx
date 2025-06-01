@@ -37,4 +37,4 @@ make build USE_CUDA=1
 - [x] Dequantize from qi8 to f32 `x_dequantize(a)`
 - [ ] Inline vector definition:
   - `x_vec('1.0, 2.0, 3.0, 4')`
-  - `x_vecpad('-4, 9, 0.00, 4.6', fill_left, fill_right)`
+  - `x_vec('-4, 9, 0.00, 4.6', left_pad, right_pad, fill_val)`

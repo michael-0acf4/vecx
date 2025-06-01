@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <iostream>
 #include <string>
+#include <vector>
 
 #define UNREACHABLE                                                            \
   do {                                                                         \
@@ -69,6 +70,10 @@ typedef struct vecx_result {
     // TODO: add debug flag
     // std::cerr << "[ERROR] " << message << "\n";
     return {status, message};
+  }
+
+  static inline vecx_result generic(const std::string &&message) {
+    return {VECX_ERR_GENERIC, message};
   }
 
   static inline vecx_result bad_vecx_header(const std::string &&ctx) {
@@ -181,3 +186,9 @@ inline vecx_result validate_layout_similarities(const vecx *a, const vecx *b) {
 
   return vecx_result::ok();
 }
+
+vecx_result parse_inline_vec(const char *text, size_t size,
+                             std::vector<float> *dest);
+
+vecx_result pack_inline_vec(const std::vector<float> &values, size_t left_pad,
+                            size_t right_pad, float fill, void *dest);

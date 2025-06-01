@@ -245,6 +245,43 @@ TEST(eucl_norm_on_huge_quantized_i8) {
   LGTM
 }
 
+TEST(inline_string_vector) {
+  {
+    std::string expr1 = ",,";
+    std::vector<float> dest1;
+    parse_inline_vec(expr1.c_str(), expr1.size(), &dest1);
+    ASSERT_EQ(dest1.size(), 0);
+  }
+
+  {
+    std::string expr1 = "";
+    std::vector<float> dest1;
+    parse_inline_vec(expr1.c_str(), expr1.size(), &dest1);
+    ASSERT_EQ(dest1.size(), 0);
+  }
+
+  {
+    std::string expr = "-4, 8,-0.1234657  ";
+    std::vector<float> dest;
+    parse_inline_vec(expr.c_str(), expr.size(), &dest);
+    ASSERT_EQ(dest.size(), 3);
+    ASSERT_CLOSE(dest[0], -4, _EPSILON);
+    ASSERT_CLOSE(dest[1], 8, _EPSILON);
+    ASSERT_CLOSE(dest[2], -0.123466, _EPSILON);
+  }
+
+  {
+    std::string expr = "4,8,";
+    std::vector<float> dest;
+    parse_inline_vec(expr.c_str(), expr.size(), &dest);
+    ASSERT_EQ(dest.size(), 2);
+    ASSERT_CLOSE(dest[0], 4, _EPSILON);
+    ASSERT_CLOSE(dest[1], 8, _EPSILON);
+  }
+
+  LGTM
+}
+
 int main() {
   std::cout << "Device: " << yellow(device_name) << "\n";
   init_device();

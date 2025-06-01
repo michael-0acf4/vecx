@@ -338,6 +338,70 @@ void x_show(sqlite3_context *ctx, int argc, sqlite3_value **argv) {
   }
 }
 
+void x_vec(sqlite3_context *ctx, int argc, sqlite3_value **argv) {
+  if (argc != 1 && argc != 4) {
+    x_emit_error(ctx, vecx_result::generic("invalid number of arguments"));
+    return;
+  }
+
+  if (argc >= 1 && sqlite3_value_type(argv[0]) != SQLITE3_TEXT) {
+    x_emit_error(ctx,
+                 vecx_result::generic("first argument is not a text string"));
+    return;
+  }
+
+  size_t left_pad = 0;
+  size_t right_pad = 0;
+  float fill_value = 0;
+
+  if (argc == 4) {
+    if (sqlite3_value_type(argv[1]) != SQLITE_INTEGER ||
+        sqlite3_value_type(argv[2]) != SQLITE_INTEGER) {
+      x_emit_error(ctx, vecx_result::error(VECX_ERR_GENERIC,
+                                           "paddings must be integers"));
+      return;
+    }
+
+    left_pad = std::max(0, sqlite3_value_int(argv[1]));
+    right_pad = std::max(0, sqlite3_value_int(argv[2]));
+
+    switch (sqlite3_value_type(argv[3])) {
+    case SQLITE_FLOAT:
+      fill_value = (float)sqlite3_value_double(argv[3]);
+      break;
+    case SQLITE_INTEGER:
+      fill_value = (float)sqlite3_value_int(argv[3]);
+      break;
+    default:
+      x_emit_error(ctx, vecx_result::generic("fill value is not a number"));
+      return;
+    }
+  }
+
+  const char *text = (const char *)sqlite3_value_text(argv[0]);
+  size_t text_size = sqlite3_value_bytes(argv[0]);
+
+  std::vector<float> floats;
+  parse_inline_vec(text, text_size, &floats);
+
+  size_t total_items = left_pad + right_pad + floats.size();
+
+  vecx_header header = {total_items, FLOAT_32, {}};
+  size_t size = header.bytes_count_total();
+  void *blob = sqlite3_malloc(size);
+  void *data = vecx_pack_header_into(header, blob);
+
+  vecx_result res =
+      pack_inline_vec(floats, left_pad, right_pad, fill_value, (float *)data);
+
+  if (res.is_err()) {
+    x_emit_error(ctx, res);
+    return;
+  }
+
+  sqlite3_result_blob(ctx, blob, size, sqlite3_free);
+}
+
 // nvcc + cl does not automatically export the symbols
 #ifdef _WIN32
 #define EXPORT extern "C" __declspec(dllexport)
@@ -372,8 +436,9 @@ EXPORT int sqlite3_vecx_init(sqlite3 *db, char **pzErrMsg,
   sqlite3_create_function(db, "x_dot", 2, SQLITE_DETERMINISTIC, 0, x_dot, 0, 0);
   sqlite3_create_function(db, "x_cosim", 2, SQLITE_DETERMINISTIC, 0, x_cosim, 0,
                           0);
+  sqlite3_create_function(db, "x_vec", -1, SQLITE_DETERMINISTIC, 0, x_vec, 0,
+                          0);
   sqlite3_create_function(db, "x_info", 0, SQLITE_UTF8 | SQLITE_DETERMINISTIC,
                           0, x_info, 0, 0);
-
   return SQLITE_OK;
 }
