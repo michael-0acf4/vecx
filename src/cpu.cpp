@@ -95,60 +95,77 @@ vecx_result vecx_dequantize_to_f32(const vecx *v, void *dest) {
 
 // Reduction
 
-double vecx_norm(const vecx *v) {
-  double sum = 0.0f;
-  switch (v->header.dtype) {
+vecx_result vecx_dot(const vecx *a, const vecx *b, double *sum) {
+  vecx_result check = validate_layout_similarities(a, b);
+  if (check.is_err()) {
+    return check;
+  }
+
+  const vecx_dtype dtype = a->header.dtype;
+  const size_t size = a->header.size;
+
+  switch (dtype) {
   case FLOAT_32: {
-    const float *data = v->data_as<float>();
+    const float *a_data = a->data_as<float>();
+    const float *b_data = b->data_as<float>();
     uint64_t i = 0;
     const size_t block = 256 / 32;
 
     __m256d lo_d_sum = _mm256_setzero_pd();
     __m256d hi_d_sum = _mm256_setzero_pd();
-    for (; i + block <= v->header.size; i += block) {
-      __m256 value_8xf32 = _mm256_loadu_ps(data + i);
-      __m256 squared = _mm256_mul_ps(value_8xf32, value_8xf32);
-      _cpu_extend_8xf32_to_2x4xf64_then_sum(squared, lo_d_sum, hi_d_sum);
+    for (; i + block <= size; i += block) {
+      __m256 a_value_8xf32 = _mm256_loadu_ps(a_data + i);
+      __m256 b_value_8xf32 = _mm256_loadu_ps(b_data + i);
+
+      __m256 prod = _mm256_mul_ps(a_value_8xf32, b_value_8xf32);
+      _cpu_extend_8xf32_to_2x4xf64_then_sum(prod, lo_d_sum, hi_d_sum);
     }
     __m256 vsum = _cpu_goback_2x4xf64_to_8xf32(lo_d_sum, hi_d_sum);
-
     float tmp[8];
     _mm256_storeu_ps(tmp, vsum);
     for (size_t j = 0; j < 8; ++j)
-      sum += tmp[j];
+      *sum += tmp[j];
 
-    for (; i < v->header.size; ++i)
-      sum += data[i] * data[i];
-
+    for (; i < size; ++i)
+      *sum += a_data[i] * b_data[i];
     break;
   }
   case QINT_8: {
-    const int8_t *data = v->data_as<int8_t>();
+    const int8_t *a_data = a->data_as<int8_t>();
+    const int8_t *b_data = b->data_as<int8_t>();
     size_t i = 0;
     const size_t block = 256 / 8;
 
     __m256d lo_d_sum = _mm256_setzero_pd();
     __m256d hi_d_sum = _mm256_setzero_pd();
 
-    for (; i + block <= v->header.size; i += block) {
-      __m256i bytes_32xi8 =
-          _mm256_loadu_si256(reinterpret_cast<__m256i const *>(data + i));
+    size_t cursor = 0;
+    for (; i + block <= size; i += block) {
+      __m256i a_bytes_32xi8 =
+          _mm256_loadu_si256(reinterpret_cast<__m256i const *>(a_data + i));
+      __m256i b_bytes_32xi8 =
+          _mm256_loadu_si256(reinterpret_cast<__m256i const *>(b_data + i));
 
-      for (const __m256 &ext_8xf32 :
-           _cpu_dequantize_fast(bytes_32xi8, v->header.qparams)) {
-        __m256 squared = _mm256_mul_ps(ext_8xf32, ext_8xf32);
-        _cpu_extend_8xf32_to_2x4xf64_then_sum(squared, lo_d_sum, hi_d_sum);
+      std::array<__m256, 4> a_chunks =
+          _cpu_dequantize_fast(a_bytes_32xi8, a->header.qparams);
+      std::array<__m256, 4> b_chunks =
+          _cpu_dequantize_fast(b_bytes_32xi8, b->header.qparams);
+
+      for (int j = 0; j < 4; ++j, cursor += 8 /*floats*/) {
+        __m256 prod = _mm256_mul_ps(a_chunks[j], b_chunks[j]);
+        _cpu_extend_8xf32_to_2x4xf64_then_sum(prod, lo_d_sum, hi_d_sum);
       }
     }
     __m256 vsum = _cpu_goback_2x4xf64_to_8xf32(lo_d_sum, hi_d_sum);
     float tmp[8];
     _mm256_storeu_ps(tmp, vsum);
     for (size_t j = 0; j < 8; ++j)
-      sum += tmp[j];
+      *sum += tmp[j];
 
-    for (; i < v->header.size; ++i) {
-      float value = _cpu_dequantize_i8(data[i], v->header.qparams);
-      sum += value * value;
+    size_t k = cursor;
+    for (; k < size; ++k) {
+      *sum += _cpu_dequantize_i8(a_data[k], a->header.qparams) *
+              _cpu_dequantize_i8(b_data[k], b->header.qparams);
     }
     break;
   }
@@ -156,7 +173,27 @@ double vecx_norm(const vecx *v) {
     UNREACHABLE;
   }
 
-  return sqrtf(sum);
+  return vecx_result::ok();
+}
+
+double vecx_norm(const vecx *v) {
+  double dot = 0.0;
+  vecx_result _res = vecx_dot(v, v, &dot);
+
+  // assert(dot > 0)
+  return sqrtf(dot);
+}
+
+vecx_result vecx_cosim(const vecx *a, const vecx *b, double *result) {
+  double na = vecx_norm(a);
+  double nb = vecx_norm(b);
+  double dot = 0.0;
+  vecx_result res = vecx_dot(a, b, &dot);
+  if (res.is_err())
+    return res;
+
+  *result = dot / (na * nb);
+  return vecx_result::ok();
 }
 
 // Binary Ops

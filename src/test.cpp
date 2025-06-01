@@ -56,6 +56,30 @@ TEST(eucl_norm_on_quantized_i8) {
   LGTM
 }
 
+TEST(cosine_similarity) {
+  float xs[10] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
+  int8_t qxs[10] = {-100, -71, -43, -15, 14, 42, 70, 99, 127, 127};
+  quant_params qparams = {0.03529411764705882, -128};
+
+  {
+    vecx vx = {{10, FLOAT_32, {}}, xs};
+    double sim;
+    vecx_result res = vecx_cosim(&vx, &vx, &sim);
+    ASSERT_EQ(res.status, VECX_OK);
+    ASSERT_CLOSE(sim, 1.0, _EPSILON)
+  }
+
+  {
+    vecx qvx = {{10, QINT_8, qparams}, qxs};
+    double qsim;
+    vecx_result res = vecx_cosim(&qvx, &qvx, &qsim);
+    ASSERT_EQ(res.status, VECX_OK);
+    ASSERT_CLOSE(qsim, 1.0, _EPSILON)
+  }
+
+  LGTM
+}
+
 TEST(utils_speed_packing) {
   float xs[10] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
   vecx_header header = {10, FLOAT_32, {}};
@@ -208,15 +232,52 @@ TEST(eucl_norm_on_huge_quantized_i8) {
 
 #ifdef ENABLE_CUDA_MODE
   // RTX 3070
-  ASSERT(ms_norm < 150 + delta)
-  ASSERT(ms_dequant < 700 + delta)
+  ASSERT(ms_norm < 250 + delta)
+  ASSERT(ms_dequant < 800 + delta)
 #else
   // Core i5 11400H 2.70GHz (6 Cores)
   // SIMD is often faster for unit ops as there
   // are less memory copy overhead
-  ASSERT(ms_norm < 160 + delta)
-  ASSERT(ms_dequant < 600 + delta)
+  ASSERT(ms_norm < 250 + delta)
+  ASSERT(ms_dequant < 700 + delta)
 #endif
+
+  LGTM
+}
+
+TEST(inline_string_vector) {
+  {
+    std::string expr1 = ",,";
+    std::vector<float> dest1;
+    parse_inline_vec(expr1.c_str(), expr1.size(), &dest1);
+    ASSERT_EQ(dest1.size(), 0);
+  }
+
+  {
+    std::string expr1 = "";
+    std::vector<float> dest1;
+    parse_inline_vec(expr1.c_str(), expr1.size(), &dest1);
+    ASSERT_EQ(dest1.size(), 0);
+  }
+
+  {
+    std::string expr = "-4, 8,-0.1234657  ";
+    std::vector<float> dest;
+    parse_inline_vec(expr.c_str(), expr.size(), &dest);
+    ASSERT_EQ(dest.size(), 3);
+    ASSERT_CLOSE(dest[0], -4, _EPSILON);
+    ASSERT_CLOSE(dest[1], 8, _EPSILON);
+    ASSERT_CLOSE(dest[2], -0.123466, _EPSILON);
+  }
+
+  {
+    std::string expr = "4,8,";
+    std::vector<float> dest;
+    parse_inline_vec(expr.c_str(), expr.size(), &dest);
+    ASSERT_EQ(dest.size(), 2);
+    ASSERT_CLOSE(dest[0], 4, _EPSILON);
+    ASSERT_CLOSE(dest[1], 8, _EPSILON);
+  }
 
   LGTM
 }

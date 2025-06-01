@@ -142,3 +142,40 @@ std::string vecx_show(const vecx &v) {
   ss << "]";
   return ss.str();
 }
+
+vecx_result parse_inline_vec(const char *text, size_t size,
+                             std::vector<float> *dest) {
+  std::string expr(text, size);
+  std::stringstream ss(expr);
+  std::string token;
+
+  while (std::getline(ss, token, ',')) {
+    size_t start = token.find_first_not_of(" \t\n");
+    size_t end = token.find_last_not_of(" \t\n");
+    if (start != std::string::npos) {
+      std::string trimmed = token.substr(start, end - start + 1);
+      dest->push_back(std::stof(trimmed));
+    }
+  }
+
+  return vecx_result::ok();
+}
+
+vecx_result pack_inline_vec(const std::vector<float> &values, size_t left_pad,
+                            size_t right_pad, float fill, void *dest) {
+  float *data = static_cast<float *>(dest);
+
+  size_t total = left_pad + values.size() + right_pad;
+  size_t i = 0;
+
+  for (; i < left_pad; ++i)
+    data[i] = fill;
+
+  for (; i < (left_pad + values.size()); ++i)
+    data[i] = values[i - left_pad];
+
+  for (; i < total; ++i)
+    data[i] = fill;
+
+  return vecx_result::ok();
+}

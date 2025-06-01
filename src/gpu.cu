@@ -149,8 +149,9 @@ struct div_trivial
     __device__ float operator()(float a, float b) const { return a / b; }
 };
 
+// FIXME: use atomicAdd(double*, double) (will not work on old GPUs)
 template <typename T>
-__global__ void euclidean_norm_kernel(const T *data, uint64_t size, quant_params qparams, float *result)
+__global__ void dot_kernel(T *a, T *b, uint64_t size, quant_params a_qparams, quant_params b_qparams, float *result)
 {
     extern __shared__ float partial_sum[];
 
@@ -160,8 +161,9 @@ __global__ void euclidean_norm_kernel(const T *data, uint64_t size, quant_params
     float sum = 0.0f;
     if (tid < size)
     {
-        float val = maybe_dequantize(data[tid], qparams);
-        sum = val * val;
+        float va = maybe_dequantize(a[tid], a_qparams);
+        float vb = maybe_dequantize(b[tid], b_qparams);
+        sum += va * vb;
     }
 
     partial_sum[local_tid] = sum;
@@ -182,54 +184,90 @@ __global__ void euclidean_norm_kernel(const T *data, uint64_t size, quant_params
 }
 
 template <typename T>
-float norm_host(const vecx *v)
+vecx_result dot_host(const vecx *a, const vecx *b, float *sum)
 {
+    vecx_result check = validate_layout_similarities(a, b);
+    if (check != vecx_result::ok())
+        return check;
 
-    cuda_ptr<T> d_data;
-    UNSAFE_MAYBE_ABORT(d_data.hostvecx2device(v));
+    cuda_ptr<T> d_a_data;
+    UNSAFE_MAYBE_ABORT(d_a_data.hostvecx2device(a));
+
+    cuda_ptr<T> &d_b_data = d_a_data;
+    if (a != b)
+    {
+        d_b_data = cuda_ptr<T>();
+        UNSAFE_MAYBE_ABORT(d_b_data.hostvecx2device(b));
+    }
 
     cuda_ptr<float> d_result;
     UNSAFE_MAYBE_ABORT(d_result.device_alloc(sizeof(float)));
     UNSAFE_MAYBE_ABORT(d_result.device_memset(0));
 
-    size_t type_size = v->header.type_size();
+    size_t type_size = a->header.type_size();
     int threads = 256;
-    int blocks = (v->header.size + threads - 1) / threads;
+    int blocks = (a->header.size + threads - 1) / threads;
     size_t shared_size = threads * type_size;
-    euclidean_norm_kernel<<<blocks, threads, shared_size>>>(d_data.ref(), v->header.size, v->header.qparams, d_result.ref());
+    dot_kernel<<<blocks, threads, shared_size>>>(d_a_data.ref(), d_b_data.ref(), a->header.size, a->header.qparams, b->header.qparams, d_result.ref());
     UNSAFE_MAYBE_ABORT_CUDA(cudaGetLastError());
     UNSAFE_MAYBE_ABORT_CUDA(cudaDeviceSynchronize());
 
-    float h_result = 0;
-    UNSAFE_MAYBE_ABORT(d_result.device2host(&h_result, sizeof(float)));
+    UNSAFE_MAYBE_ABORT(d_result.device2host(sum, sizeof(float)));
 
-    cudaError_t err = cudaGetLastError();
-    if (err != cudaSuccess)
-    {
-        return vecx_result::device_error(cudaGetErrorString(err));
-    }
+    return vecx_result::ok();
+}
 
-    return sqrtf(h_result);
+vecx_result vecx_dot(const vecx *a, const vecx *b, double *sum)
+{
+    vecx_result check = validate_layout_similarities(a, b);
+    if (check != vecx_result::ok())
+        return check;
+
+    float tsum = 0.0;
+
+    if (a->header.dtype == FLOAT_32)
+        dot_host<float>(a, b, &tsum);
+    else
+        dot_host<int8_t>(a, b, &tsum);
+
+    *sum = (double)tsum;
+
+    return vecx_result::ok();
 }
 
 double vecx_norm(const vecx *v)
 {
-    return v->header.dtype == FLOAT_32 ? norm_host<float>(v)
-                                       : norm_host<int8_t>(v);
+    double sum;
+    vecx_dot(v, v, &sum);
+    return sqrtf(sum);
+}
+
+vecx_result vecx_cosim(const vecx *a, const vecx *b, double *result)
+{
+    double na = vecx_norm(a);
+    double nb = vecx_norm(b);
+    double dot = 0.0;
+    vecx_result res = vecx_dot(a, b, &dot);
+    if (res.is_err())
+        return res;
+
+    *result = dot / (na * nb);
+    return vecx_result::ok();
 }
 
 template <typename T, typename op_trivial>
 __global__ void op_apply_kernel(T *a, T *b,
                                 float *result,
                                 size_t size,
-                                quant_params qparams,
+                                quant_params a_qparams,
+                                quant_params b_qparams,
                                 op_trivial op_apply)
 {
     size_t i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i < size)
     {
-        float va = maybe_dequantize(a[i], qparams);
-        float vb = maybe_dequantize(b[i], qparams);
+        float va = maybe_dequantize(a[i], a_qparams);
+        float vb = maybe_dequantize(b[i], b_qparams);
         result[i] = op_apply(va, vb);
     }
 }
@@ -244,11 +282,14 @@ vecx_result op_apply_host(const vecx *a, const vecx *b, void *dest, op_trivial o
     cuda_ptr<T> d_a_data;
     UNSAFE_MAYBE_ABORT(d_a_data.hostvecx2device(a));
 
-    cuda_ptr<T> d_b_data;
-    UNSAFE_MAYBE_ABORT(d_b_data.hostvecx2device(b));
+    cuda_ptr<T> &d_b_data = d_a_data;
+    if (a != b)
+    {
+        d_b_data = cuda_ptr<T>();
+        UNSAFE_MAYBE_ABORT(d_b_data.hostvecx2device(b));
+    }
 
     size_t size = a->header.size;
-    quant_params qparams = a->header.qparams;
     cuda_ptr<float> d_result;
     d_result.device_alloc(size * sizeof(float));
     d_result.device_memset(0.0, size * sizeof(float));
@@ -256,19 +297,13 @@ vecx_result op_apply_host(const vecx *a, const vecx *b, void *dest, op_trivial o
     int threads = 256;
     int blocks = (a->header.size + threads - 1) / threads;
     size_t type_size = vecx_type_size(a->header.dtype);
-    op_apply_kernel<<<blocks, threads>>>(d_a_data.ref(), d_b_data.ref(), d_result.ref(), size, qparams, op_apply);
+    op_apply_kernel<<<blocks, threads>>>(d_a_data.ref(), d_b_data.ref(), d_result.ref(), size, a->header.qparams, b->header.qparams, op_apply);
     UNSAFE_MAYBE_ABORT_CUDA(cudaGetLastError());
     UNSAFE_MAYBE_ABORT_CUDA(cudaDeviceSynchronize());
 
     vecx_header header = {size, FLOAT_32, {}};
     float *h_result = (float *)vecx_pack_header_into(header, dest);
     UNSAFE_MAYBE_ABORT(d_result.device2host(h_result, size * sizeof(float)));
-
-    cudaError_t err = cudaGetLastError();
-    if (err != cudaSuccess)
-    {
-        return vecx_result::device_error(cudaGetErrorString(err));
-    }
 
     return vecx_result::ok();
 }
