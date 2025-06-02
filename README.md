@@ -50,11 +50,11 @@ simple numpy based serialization.
 
 ```
 4 bytes -> "vecx"
-4 bytes -> dtype (i32): 1 for F32, 2 for QI8
+8 bytes -> vector size
+1 byte  -> dtype (i8): 1 for F32, 2 for QI8
 4 bytes -> i8-based quantization scale (f32), unused if dtype = 1
 4 bytes -> i8-based quantization zero point (i32), unused if dtype = 1
-8 bytes -> vector size
-N bytes -> data region, exactly `sizeof dtype in bytes * size`
+N bytes -> data region, exactly `size required for dtype in bytes * vector size`
 ```
 
 > [!WARNING]

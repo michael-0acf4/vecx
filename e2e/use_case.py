@@ -17,7 +17,8 @@ cur.execute(
         w.id,
         w.word,
         floor(100 * (1 + x_cosim(w.emb, t.emb)) / 2) similarity
-    FROM Words AS w
+    FROM
+        Words AS w
     JOIN
         (SELECT * FROM Words WHERE id = ?) AS t
     ORDER BY similarity DESC;
